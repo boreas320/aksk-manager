@@ -1,0 +1,25 @@
+{
+  "name": "aksk-manager",
+  "version": "0.1.0",
+  "description": "Personal Apple Keychain credential manager for Codex",
+  "author": {
+    "name": "boreas320"
+  },
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "AKSK Manager",
+    "shortDescription": "通过苹果钥匙串管理并使用云密钥",
+    "longDescription": "在 Codex 中管理 AK/SK 和 API Token，使用 Apple 钥匙串保护凭据，并通过 iCloud 钥匙串同步。",
+    "developerName": "boreas320",
+    "category": "Developer Tools",
+    "capabilities": [
+      "Interactive",
+      "Read",
+      "Write"
+    ],
+    "logo": "./assets/icon.svg",
+    "composerIcon": "./assets/icon.svg",
+    "defaultPrompt": "打开 AKSK Manager 密钥管理界面"
+  }
+}

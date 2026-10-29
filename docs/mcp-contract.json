@@ -1,0 +1,385 @@
+{
+  "version": "0.1.0",
+  "transport": "stdio",
+  "tools": [
+    {
+      "name": "aksk.open",
+      "title": "AKSK Manager",
+      "description": "Open the AKSK Manager credential management app.",
+      "inputSchema": {
+        "properties": {},
+        "title": "open_managerArguments",
+        "type": "object"
+      },
+      "icons": [
+        {
+          "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect x='8' y='27' width='48' height='30' rx='8' fill='%232e7164'/%3E%3Cpath d='M20 27V19a12 12 0 0 1 24 0v8' fill='none' stroke='%232e7164' stroke-width='5'/%3E%3C/svg%3E",
+          "mimeType": "image/svg+xml"
+        }
+      ],
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "_meta": {
+        "ui": {
+          "resourceUri": "ui://aksk-manager/vault"
+        },
+        "openai/ui": {
+          "entrypoints": [
+            {
+              "type": "thread"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "list_secrets",
+      "description": "Search active secret metadata by name, account, provider, environment or tag. No secret values.",
+      "inputSchema": {
+        "properties": {
+          "query": {
+            "default": "",
+            "title": "Query",
+            "type": "string"
+          }
+        },
+        "title": "list_secretsArguments",
+        "type": "object"
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "get_secret_metadata",
+      "description": "Get a credential's metadata, revision and available field names without revealing secrets.",
+      "inputSchema": {
+        "properties": {
+          "secret_id": {
+            "title": "Secret Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "secret_id"
+        ],
+        "title": "get_secret_metadataArguments",
+        "type": "object"
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "run_with_secrets",
+      "description": "Run a user-authorized command with credentials injected locally into its environment.\n\n    bindings maps an environment variable name to {secret_id, field}. Fields are access_key,\n    secret_key, session_token, token, or database fields engine, host, port, database,\n    username, password, ssl_mode. Bind only fields listed in metadata. Use an absolute cwd. argv is not shell-expanded;\n    explicitly invoke a shell only when needed. Returns a run id; poll get_run for output.\n    Never run commands intended to reveal or export credentials. This is not a security sandbox.\n    ",
+      "inputSchema": {
+        "properties": {
+          "argv": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Argv",
+            "type": "array"
+          },
+          "cwd": {
+            "title": "Cwd",
+            "type": "string"
+          },
+          "bindings": {
+            "additionalProperties": {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            "title": "Bindings",
+            "type": "object"
+          },
+          "timeout_seconds": {
+            "default": 600,
+            "title": "Timeout Seconds",
+            "type": "number"
+          }
+        },
+        "required": [
+          "argv",
+          "cwd",
+          "bindings"
+        ],
+        "title": "run_with_secretsArguments",
+        "type": "object"
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "openWorldHint": true
+      }
+    },
+    {
+      "name": "get_run",
+      "description": "Get the run's state and completed redacted output. Jobs belong to this MCP session.",
+      "inputSchema": {
+        "properties": {
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "run_id"
+        ],
+        "title": "get_runArguments",
+        "type": "object"
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "cancel_run",
+      "description": "Cancel a running command and its process group.",
+      "inputSchema": {
+        "properties": {
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "run_id"
+        ],
+        "title": "cancel_runArguments",
+        "type": "object"
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "openWorldHint": true
+      }
+    },
+    {
+      "name": "ui_status",
+      "description": "App only: inspect helper and Keychain access, without claiming remote sync.",
+      "inputSchema": {
+        "properties": {},
+        "title": "ui_statusArguments",
+        "type": "object"
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "_meta": {
+        "ui": {
+          "visibility": [
+            "app"
+          ]
+        }
+      }
+    },
+    {
+      "name": "ui_list",
+      "description": "App only: list active or trashed credential metadata.",
+      "inputSchema": {
+        "properties": {
+          "trash": {
+            "default": false,
+            "title": "Trash",
+            "type": "boolean"
+          }
+        },
+        "title": "ui_listArguments",
+        "type": "object"
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "_meta": {
+        "ui": {
+          "visibility": [
+            "app"
+          ]
+        }
+      }
+    },
+    {
+      "name": "ui_save",
+      "description": "App only: save a credential. Omitted values preserve existing secrets of the same kind.",
+      "inputSchema": {
+        "properties": {
+          "record": {
+            "additionalProperties": true,
+            "title": "Record",
+            "type": "object"
+          }
+        },
+        "required": [
+          "record"
+        ],
+        "title": "ui_saveArguments",
+        "type": "object"
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "_meta": {
+        "ui": {
+          "visibility": [
+            "app"
+          ]
+        }
+      }
+    },
+    {
+      "name": "ui_reveal",
+      "description": "App only: reveal a credential to its management interface via private metadata.",
+      "inputSchema": {
+        "properties": {
+          "secret_id": {
+            "title": "Secret Id",
+            "type": "string"
+          },
+          "revision": {
+            "title": "Revision",
+            "type": "string"
+          }
+        },
+        "required": [
+          "secret_id",
+          "revision"
+        ],
+        "title": "ui_revealArguments",
+        "type": "object"
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "_meta": {
+        "ui": {
+          "visibility": [
+            "app"
+          ]
+        }
+      }
+    },
+    {
+      "name": "ui_trash",
+      "description": "App only: move a credential into trash.",
+      "inputSchema": {
+        "properties": {
+          "secret_id": {
+            "title": "Secret Id",
+            "type": "string"
+          },
+          "revision": {
+            "title": "Revision",
+            "type": "string"
+          }
+        },
+        "required": [
+          "secret_id",
+          "revision"
+        ],
+        "title": "ui_trashArguments",
+        "type": "object"
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "_meta": {
+        "ui": {
+          "visibility": [
+            "app"
+          ]
+        }
+      }
+    },
+    {
+      "name": "ui_restore",
+      "description": "App only: restore a trashed credential.",
+      "inputSchema": {
+        "properties": {
+          "secret_id": {
+            "title": "Secret Id",
+            "type": "string"
+          },
+          "revision": {
+            "title": "Revision",
+            "type": "string"
+          }
+        },
+        "required": [
+          "secret_id",
+          "revision"
+        ],
+        "title": "ui_restoreArguments",
+        "type": "object"
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "_meta": {
+        "ui": {
+          "visibility": [
+            "app"
+          ]
+        }
+      }
+    },
+    {
+      "name": "ui_purge",
+      "description": "App only: permanently delete a trashed item, including its synced copies.",
+      "inputSchema": {
+        "properties": {
+          "secret_id": {
+            "title": "Secret Id",
+            "type": "string"
+          },
+          "revision": {
+            "title": "Revision",
+            "type": "string"
+          }
+        },
+        "required": [
+          "secret_id",
+          "revision"
+        ],
+        "title": "ui_purgeArguments",
+        "type": "object"
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "openWorldHint": false
+      },
+      "_meta": {
+        "ui": {
+          "visibility": [
+            "app"
+          ]
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,35 @@
+{
+  "name": "aksk-manager-ui",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "engines": {
+    "node": ">=22.12",
+    "npm": ">=10"
+  },
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "tsc --noEmit && vite build",
+    "test": "playwright test"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/ext-apps": "^1.7.5",
+    "@openai/mcp-extensions": "0.2.1",
+    "lucide-react": "^0.468.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.56.0",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "typescript": "^5.9.0",
+    "vite": "^6.4.0",
+    "vite-plugin-singlefile": "^2.3.0"
+  },
+  "overrides": {
+    "@openai/mcp-extensions": {
+      "zod": "^4.6.6"
+    }
+  }
+}

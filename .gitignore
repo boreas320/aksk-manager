@@ -1,0 +1,16 @@
+.DS_Store
+.build/
+.venv/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+*.pyc
+node_modules/
+dist/
+test-results/
+playwright-report/
+native/AKSKHelper.xcodeproj/xcuserdata/
+runtime/
+src/aksk_manager/ui/index.html
+*.mobileprovision
+*.provisionprofile
