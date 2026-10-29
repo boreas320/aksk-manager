@@ -38,10 +38,10 @@
 ## 仅应用可见
 
 `list_secrets(query)` 搜索全部公开元数据：名称、厂商、账号、环境、标签、备注、类型、字段名称、ID 和日期。
-`ui_list(trash=false, query="")` 另外支持数据库类型、主机、端口、数据库名、用户名和 TLS 模式的值；
+`ui_list(trash=false, query="")` 支持全部字段，包括数据库连接信息、密码、Access Key、Secret Key、Session Token 和 API Token 的值；
 匹配在本地组件内完成，只返回匹配条目的元数据，不返回连接字段或搜索索引。
 两者均忽略大小写、全半角与重音；空白分隔的关键词必须全部匹配，可以跨字段匹配。
-密码、Access Key、Secret Key、Session Token、API Token 的值不参与搜索。
+密钥值搜索仅开放给管理界面；模型的 `list_secrets` 仍仅匹配公开元数据，不支持通过密钥值探测条目。
 
 `ui_status`、`ui_list`、`ui_save`、`ui_reveal`、`ui_trash`、`ui_restore`、`ui_purge`
 均声明 `ui.visibility: ["app"]`。

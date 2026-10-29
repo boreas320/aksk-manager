@@ -55,7 +55,13 @@ async def test_search_connection_matches_remain_app_only(api, native):
     assert r["id"] not in json.dumps([c.model_dump() for c in response.content])
     assert all(v not in response.model_dump_json() for v in DB_VALUES.values())
     assert (await api.list_secrets(DB_VALUES["host"])).structuredContent["data"] == []
-    assert (await api.ui_list(query=DB_VALUES["password"])).meta["private"]["data"] == []
+    for query in [DB_VALUES["password"], "db-password-319"]:
+        response = await mcp.call_tool("ui_list", {"query": query})
+        assert [i["id"] for i in response.meta["private"]["data"]] == [r["id"]]
+        assert response.structuredContent is None
+        assert query not in response.model_dump_json()
+        assert r["id"] not in json.dumps([c.model_dump() for c in response.content])
+        assert (await api.list_secrets(query)).structuredContent["data"] == []
 
 
 async def test_run_tool_returns_safe_completed_result(api, native):

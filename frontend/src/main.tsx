@@ -299,8 +299,8 @@ function Manager() {
             <Search size={17} />
             <input
               aria-label="搜索密钥"
-              placeholder="搜索全部信息（不含密钥值）"
-              title="可搜索名称、厂商、账号、环境、标签、备注、类型、字段名及数据库连接信息；多个关键词用空格分隔。"
+              placeholder="搜索全部信息，包括密钥值"
+              title="可搜索名称、厂商、账号、环境、标签、备注、类型、字段名、数据库连接信息及密钥值；多个关键词用空格分隔。"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
             />

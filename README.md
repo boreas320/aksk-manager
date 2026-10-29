@@ -28,25 +28,52 @@ Codex 先查找条目 ID，再调用 `run_with_secrets`。密钥由本地组件�
 Codex 可通过字段引用注入客户端支持的环境变量，例如 PostgreSQL 的 `PGHOST`、`PGUSER`、`PGPASSWORD`。
 实际连接和查询需要本机已有相应客户端及网络访问权限；保存成功不代表连接测试通过。
 
-## 本机开发和安装
+## 日常开发
 
-要求：macOS 14+、Xcode、有效的 Apple 开发签名和 **Mac** 配置描述文件、`uv`、构建前端用的 Node 22.12+ / npm 10+。
-运行时由 `uv` 按 `uv.lock` 安装 Python 3.12 和依赖；无需运行前端开发服务器。
-
-1. 在 [Apple Developer 账户](https://developer.apple.com/account/) 查看并接受尚未处理的开发者协议。
-2. 在 Xcode → Settings → Accounts 中确认开发团队可用。
-3. 在仓库根目录执行：
+在仓库根目录运行：
 
 ```sh
-cd frontend
-npx --yes npm@10 ci
-npx --yes npm@10 run build
-cd ..
-uv sync --frozen
-./scripts/build-native.sh
-uv run python scripts/smoke-keychain.py
-./scripts/install-local.sh
+./scripts/preview.sh
 ```
+
+打开 **http://127.0.0.1:5173/preview.html**。预览直接加载正式 React 界面，保存代码后自动更新，
+不需要签名、Python 服务或重新安装插件。首次启动会按锁文件安装前端依赖；后续依赖不变时复用。
+端口被占用时明确报错，可用 `./scripts/preview.sh --port 5180` 指定其他端口。按 Ctrl+C 停止。
+
+预览包含 AK/SK、API Token、数据库连接三类无效演示凭据，支持搜索、新增、编辑、显示、复制和回收站操作。
+顶部可以切换桌面/平板/手机尺寸、浅色/深色主题，以及空列表、组件不可用、编辑冲突状态。
+「重置演示数据」恢复初始列表。数据只在当前页面内存中，整页刷新会重置；请勿输入真实密钥。
+**这里的保存与同步提示属于模拟界面，不会读写真实钥匙串，也不会执行本地命令。**
+预览宿主与界面测试共用 `frontend/preview/host.ts`，不编入发布用的单文件 HTML。
+
+效果确认后，一条命令更新本机插件：
+
+```sh
+./scripts/update.sh
+```
+
+依次安装锁定依赖、运行静态检查及后端/界面测试、构建前端、更新 MCP 契约，
+然后检查签名组件、验证真实服务、安装本地插件、验证已安装版本，最后输出 ZIP 和 SHA-256。
+任一步失败都会停止后续步骤；不会提交或推送 Git。
+首次运行建立签名构建缓存；之后原生源码、构建脚本、团队及签名组件内容未变化时复用组件，
+无需每次重新签名。重建后自动进行合成凭据的真实钥匙串测试，并清理测试条目。
+依赖缓存与构建指纹存放在忽略的 `.build/dev/` 下。
+
+```sh
+./scripts/update.sh --check   # 仅测试与前端构建，不签名、不安装
+./scripts/update.sh --native  # 强制重建签名组件，例如更新描述文件
+```
+
+预览要求 Node 22.12+、npm/npx、Python 3（仅用于启动脚本）。完整更新另外要求 macOS 14+、Xcode、
+有效 Apple 开发签名与 Mac 配置描述文件、`uv`、Codex CLI。
+界面测试优先使用已安装的 Google Chrome；否则安装 Playwright Chromium。
+可通过 `PLAYWRIGHT_CHANNEL` 指定已有的浏览器通道。
+
+## 首次安装与签名
+
+先在 [Apple Developer 账户](https://developer.apple.com/account/) 接受尚未处理的开发者协议，
+并在 Xcode → Settings → Accounts 确认开发团队可用，然后执行 `./scripts/update.sh`。
+运行时由 `uv` 按 `uv.lock` 安装 Python 3.12 和依赖；发布插件不依赖前端开发服务器。
 
 当前个人构建默认团队为 `XHD2S8GC8Q`。如有意构建另一套独立密钥库，可设置 `AKSK_DEVELOPMENT_TEAM`；
 **改变团队或钥匙串访问组会改变可访问的条目集合，不是原密钥库的升级方式。**
@@ -100,6 +127,6 @@ Swift 逻辑测试将 `TESTING` 编译到独立可执行文件，只使用合成
 - 已知秘密原文在输出中被遮盖；编码、切分、变换后的内容不能保证被识别。
 - 任务输出只保留在本次 MCP 会话内存，最多保留 64 个任务；每项 stdout/stderr 各最多 512 KiB。
 - 默认任务超时 600 秒，可设 0.1–3600 秒；最多同时运行 8 个任务。正常关闭会话会终止本组件仍管理的任务。
-- 本地组件通讯通过私有 stdin/stdout 管道；没有 HTTP 监听端口、云端代理或后台上传。
+- 发布插件的本地组件通讯通过私有 stdin/stdout 管道；没有 HTTP 监听端口、云端代理或后台上传。开发预览只在 127.0.0.1 提供前端文件与模拟宿主。
 
 接口说明见 [API 文档](docs/api.md)，生成的 MCP 契约见 [mcp-contract.json](docs/mcp-contract.json)。

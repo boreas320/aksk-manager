@@ -101,10 +101,10 @@ async def test_search_all_metadata_and_private_connection_fields(native):
     for query in ["值班交接", "CAFE", "数据库连接", "TLS 模式", "主机", "ssl_mode",
                   "  EXAMPLE\t数据库\n交接  ", "ＥＸＡＭＰＬＥ", r["id"], r["updatedAt"]]:
         assert [i["id"] for i in await native.call("list", {"query": query})] == [r["id"]]
-    for field, value in DB_VALUES.items():
+    for value in DB_VALUES.values():
         assert await native.call("list", {"query": value}) == []
         result = await native.call("ui_list", {"query": value})
-        assert [i["id"] for i in result] == ([] if field == "password" else [r["id"]])
+        assert [i["id"] for i in result] == [r["id"]]
         assert all(v not in json.dumps(result) for v in DB_VALUES.values())
     assert await native.call("ui_list", {"query": "postgresql nobody-matches"}) == []
     assert len(await native.call("ui_list", {"query": "POSTGRESQL synthetic_reader 55432"})) == 1
@@ -115,13 +115,22 @@ async def test_search_all_metadata_and_private_connection_fields(native):
     assert len(await native.call("ui_list", {"query": "synthetic-db.internal"})) == 1
 
 
-async def test_search_never_matches_credential_values(native):
-    await create(native)
-    await create(native, kind="aksk", values={"access_key": AK, "secret_key": SK,
-                                             "session_token": "session-sensitive-99881"})
-    for value in [TOKEN, AK, SK, "session-sensitive-99881", "sensitive-9988", "MUST-NOT-APPEAR"]:
-        for method in ["list", "ui_list"]:
-            assert await native.call(method, {"query": value}) == []
+async def test_credential_value_search_is_app_only(native):
+    token = await create(native)
+    aksk = await create(native, kind="aksk", values={"access_key": AK, "secret_key": SK,
+                                                  "session_token": "session-sensitive-99881"})
+    for value, record in [(TOKEN, token), (AK, aksk), (SK, aksk),
+                          ("session-sensitive-99881", aksk), ("sensitive-9988", aksk),
+                          ("MUST-NOT-APPEAR", token)]:
+        assert await native.call("list", {"query": value}) == []
+        result = await native.call("ui_list", {"query": value})
+        assert [i["id"] for i in result] == [record["id"]]
+        assert value not in json.dumps(result)
+    trashed = await native.call("trash", token)
+    assert await native.call("ui_list", {"query": TOKEN}) == []
+    assert len(await native.call("ui_list", {"query": TOKEN, "trash": True})) == 1
+    await native.call("purge", trashed)
+    assert await native.call("ui_list", {"query": TOKEN, "trash": True}) == []
 
 
 async def test_database_preservation_injection_and_lifecycle(native):

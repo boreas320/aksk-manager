@@ -169,9 +169,9 @@ async def ui_status() -> CallToolResult:
 
 @mcp.tool(annotations=READ, meta=APP_ONLY)
 async def ui_list(trash: bool = False, query: str = "") -> CallToolResult:
-    """App only: search metadata and non-password database connection fields locally.
+    """App only: search all fields locally, including passwords, keys and token values.
 
-    Returns metadata only. Never searches passwords, keys or token values.
+    Returns metadata only via private app results; never returns matched credential values.
     """
     return await invoke("ui_list", {"trash": trash, "query": query}, private=True)
 

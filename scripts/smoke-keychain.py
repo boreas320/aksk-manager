@@ -11,6 +11,7 @@ async def main(kind="token"):
     bridge = NativeBridge()
     independent = NativeBridge()
     record = None
+    cleanup_failed = False
     try:
         await bridge.call("status")
         value = "SYNTHETIC-" + uuid.uuid4().hex
@@ -43,8 +44,12 @@ async def main(kind="token"):
             matches = await independent.call("ui_list", {"query": query})
             assert [item["id"] for item in matches] == [record["id"]]
             assert await independent.call("list", {"query": query}) == []
-        assert await independent.call("ui_list", {"query": record["name"] + " " + value}) == []
-        print("PASS: 本地搜索、连接字段隔离和秘密值排除。")
+        secret_query = record["name"] + " " + value
+        matches = await independent.call("ui_list", {"query": secret_query})
+        assert [item["id"] for item in matches] == [record["id"]]
+        assert value not in str(matches)
+        assert await independent.call("list", {"query": secret_query}) == []
+        print("PASS: 界面支持密钥值搜索；结果不含明文，模型接口仍仅搜索元数据。")
         updated = await bridge.call("save", {**record, "name": record["name"] + " updated"})
         readback = await independent.call("metadata", {"id": updated["id"]})
         assert readback["revision"] == updated["revision"]
@@ -99,9 +104,12 @@ async def main(kind="token"):
                     assert exc.code == "NOT_FOUND"
                 print("PASS: 合成测试条目已清理，并经独立进程确认不存在。双机同步仍需独立验收。")
             except Exception:  # noqa: BLE001 -- never emit a cleanup traceback containing credential data.
+                cleanup_failed = True
                 print("测试条目清理未完成，请在界面中查找 AKSK smoke 条目；ID:", record["id"])
         await bridge.close()
         await independent.close()
+        if cleanup_failed:
+            raise SystemExit(1)
 
 
 if __name__ == "__main__":

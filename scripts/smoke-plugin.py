@@ -30,7 +30,7 @@ async def main(root: Path):
         if private["ok"]:
             print("PASS: 本机钥匙串可读取；未执行真实写入或双机同步测试。")
         else:
-            print("BLOCKED:", private["error"]["code"], private["error"]["message"])
+            raise SystemExit("BLOCKED: " + private["error"]["code"] + ": " + private["error"]["message"])
 
 
 if __name__ == "__main__":

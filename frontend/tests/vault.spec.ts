@@ -2,26 +2,11 @@ import { test, expect, Page } from "@playwright/test";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 const html = readFileSync(resolve("../src/aksk_manager/ui/index.html"), "utf8");
-const fixture = {
-  id: "demo-1",
-  revision: "rev-1",
-  name: "生产账单 · 只读",
-  kind: "aksk",
-  provider: "AWS",
-  account: "billing-prod",
-  environment: "生产",
-  tags: ["账单", "只读"],
-  notes: "仅用于查询账单与资源。",
-  fields: ["access_key", "secret_key"],
-  updatedAt: "2026-10-29T10:00:00Z",
-  deletedAt: null,
-  expiresAt: null,
-};
+import { mountPreviewHost, type PreviewOptions } from "../preview/host";
 
 async function host(
   page: Page,
-  { empty = false, blocked = false, conflict = false, dark = false,
-    searchResults = {} as Record<string, { ids: string[]; delay?: number }> } = {},
+  options: PreviewOptions = {},
 ) {
   await page.route("https://aksk.test/", (route) =>
     route.fulfill({
@@ -30,145 +15,10 @@ async function host(
     }),
   );
   await page.goto("https://aksk.test/");
-  await page.evaluate(
-    ({ html, fixture, empty, blocked, conflict, dark, searchResults }) => {
-      const frame = document.querySelector("iframe")!;
-      let items: any[] = empty
-        ? []
-        : [
-            fixture,
-            {
-              ...fixture,
-              id: "demo-2",
-              name: "代码仓库访问",
-              kind: "token",
-              provider: "GitHub",
-              account: "personal",
-              environment: "个人",
-              tags: ["开发"],
-              fields: ["token"],
-            },
-            {
-              ...fixture,
-              id: "demo-3",
-              name: "测试环境资源查询",
-              provider: "华为云",
-              account: "sandbox",
-              environment: "测试",
-              tags: ["测试"],
-            },
-          ];
-      (window as any).calls = [];
-      (window as any).contextLeaks = [];
-      window.addEventListener("message", (e) => {
-        if (e.source !== frame.contentWindow || !e.data?.jsonrpc) return;
-        const m = e.data;
-        if (["ui/update-model-context", "ui/message"].includes(m.method))
-          (window as any).contextLeaks.push(m.params);
-        if (m.id === undefined) return;
-        let result: any = {};
-        let delay = 0;
-        if (m.method === "ui/initialize")
-          result = {
-            protocolVersion: "2026-01-26",
-            hostInfo: { name: "test-host", version: "26.1029.1" },
-            hostCapabilities: { serverTools: {}, serverResources: {} },
-            hostContext: {
-              theme: dark ? "dark" : "light",
-              displayMode: "fullscreen",
-              availableDisplayModes: ["fullscreen"],
-            },
-          };
-        if (m.method === "tools/call") {
-          const { name, arguments: a = {} } = m.params;
-          (window as any).calls.push({ name, args: a });
-          let data: any = {},
-            error: any;
-          if (name === "ui_status") {
-            if (blocked)
-              error = {
-                code: "SIGNING_REQUIRED",
-                message:
-                  "本地组件缺少匹配的 Mac 配置描述文件，请重新签名构建。",
-              };
-            else data = { keychain: "available", remote_verified: false };
-          }
-          if (name === "ui_list") {
-            data = items.filter((i) => !!i.deletedAt === !!a.trash);
-            if (a.query) {
-              const answer = searchResults[a.query];
-              data = answer
-                ? data.filter((i: any) => answer.ids.includes(i.id))
-                : data.filter((i: any) => JSON.stringify(i).toLowerCase().includes(a.query.toLowerCase()));
-              delay = answer?.delay ?? 0;
-            }
-          }
-          if (name === "get_secret_metadata")
-            data = items.find((i) => i.id === a.secret_id);
-          if (name === "ui_reveal")
-            data = {
-              values: {
-                access_key: "SYNTHETIC_ACCESS",
-                secret_key: "SYNTHETIC_SECRET",
-                token: "SYNTHETIC_TOKEN",
-              },
-            };
-          if (name === "ui_save") {
-            if (conflict)
-              error = {
-                code: "CONFLICT",
-                message: "条目已发生变化，请重新打开编辑。",
-              };
-            else {
-              const r = a.record;
-              data = {
-                ...r,
-                id: r.id || "new-item",
-                revision: "new-rev",
-                fields:
-                  r.kind === "aksk" ? ["access_key", "secret_key"] : ["token"],
-                updatedAt: new Date().toISOString(),
-                deletedAt: null,
-              };
-              delete data.values;
-              items = [...items.filter((i) => i.id !== data.id), data];
-            }
-          }
-          if (["ui_trash", "ui_restore"].includes(name)) {
-            items = items.map((i) =>
-              i.id === a.secret_id
-                ? {
-                    ...i,
-                    deletedAt:
-                      name === "ui_trash" ? new Date().toISOString() : null,
-                    revision: "changed",
-                  }
-                : i,
-            );
-          }
-          if (name === "ui_purge")
-            items = items.filter((i) => i.id !== a.secret_id);
-          const payload = error ? { ok: false, error } : { ok: true, data };
-          result = name.startsWith("ui_")
-            ? {
-                content: [{ type: "text", text: "界面操作完成。" }],
-                _meta: { private: payload },
-                isError: !!error,
-              }
-            : { content: [], structuredContent: payload };
-        }
-        setTimeout(() => frame.contentWindow!.postMessage(
-          { jsonrpc: "2.0", id: m.id, result },
-          "*",
-        ), delay);
-      });
-      frame.srcdoc = html;
-    },
-    { html, fixture, empty, blocked, conflict, dark, searchResults },
-  );
+  await page.evaluate(mountPreviewHost, { ...options, html });
   const ui = page.frameLocator("iframe");
   await expect(ui.locator(".status-strip")).toContainText(
-    blocked ? "等待本地组件就绪" : "本机钥匙串可访问",
+    options.blocked ? "等待本地组件就绪" : "本机钥匙串可访问",
   );
   return ui;
 }
@@ -212,6 +62,7 @@ test("create, preserve existing secrets, trash and restore", async ({
   await expect(ui.getByRole("dialog")).toContainText("保留现有密钥内容");
   await ui.getByLabel("名称（必填）", { exact: true }).fill("改名");
   await ui.getByRole("button", { name: "保存密钥" }).click();
+  await expect(ui.getByRole("dialog")).toHaveCount(0);
   const saves = await page.evaluate(() =>
     (window as any).calls.filter((c: any) => c.name === "ui_save"),
   );
@@ -252,6 +103,7 @@ test("database form saves private fields, filters and preserves existing configu
   await expect(dialog).toContainText("保留现有连接配置，包括密码");
   await dialog.getByLabel("名称（必填）", { exact: true }).fill("数据库改名");
   await dialog.getByRole("button", { name: "保存密钥" }).click();
+  await expect(ui.getByRole("dialog")).toHaveCount(0);
   const saves = await page.evaluate(() => (window as any).calls.filter((c: any) => c.name === "ui_save"));
   expect(saves[0].args.record.kind).toBe("database");
   expect(saves[0].args.record.values).toEqual({ engine: "PostgreSQL", host: "synthetic-db.internal", port: "5432", database: "ledger", username: "reader", password: "SYNTHETIC_DATABASE_PASSWORD", ssl_mode: "verify-full" });

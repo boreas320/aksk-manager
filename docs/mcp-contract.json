@@ -190,7 +190,7 @@
     },
     {
       "name": "ui_list",
-      "description": "App only: search metadata and non-password database connection fields locally.\n\n    Returns metadata only. Never searches passwords, keys or token values.\n    ",
+      "description": "App only: search all fields locally, including passwords, keys and token values.\n\n    Returns metadata only via private app results; never returns matched credential values.\n    ",
       "inputSchema": {
         "properties": {
           "trash": {

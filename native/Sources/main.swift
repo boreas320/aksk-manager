@@ -41,7 +41,7 @@ struct Record: Codable {
   var values: [String: String]
   var updatedAt: String
   var deletedAt: String?
-  func matches(_ query: String, connectionFields: Bool) -> Bool {
+  func matches(_ query: String, includeValues: Bool) -> Bool {
     func normalize(_ text: String) -> String {
       text.folding(options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive],
                    locale: Locale(identifier: "en_US_POSIX"))
@@ -58,12 +58,8 @@ struct Record: Codable {
     var text = [id, revision, kind, kinds[kind] ?? kind, name, provider, account,
                 environment, notes, updatedAt, deletedAt ?? "", expiresAt ?? ""] + tags
     for field in values.keys { text += [field, labels[field] ?? field] }
-    // Never create a password/token matching oracle. Connection values stay local.
-    if connectionFields && kind == "database" {
-      for field in ["engine", "host", "port", "database", "username", "ssl_mode"] {
-        if let value = values[field] { text.append(value) }
-      }
-    }
+    // App-only matching stays in the helper; results still contain metadata only.
+    if includeValues { text.append(contentsOf: values.values) }
     let haystack = normalize(text.joined(separator: " "))
     return terms.allSatisfy { haystack.contains($0) }
   }
@@ -451,7 +447,7 @@ final class Service {
       let query = p["query"] as? String ?? ""
       return try store.all().filter {
         ($0.deletedAt != nil) == trash
-          && $0.matches(query, connectionFields: method == "ui_list")
+          && $0.matches(query, includeValues: method == "ui_list")
       }.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }.map(\.metadata)
     case "metadata": return try store.read(required(p, "id")).metadata
     case "save": return try withStoreLock { try save(p, store: store).metadata }

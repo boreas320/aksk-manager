@@ -1,0 +1,17 @@
+:root { font: 13px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #243b35; background: #e8eeeb; }
+* { box-sizing: border-box; }
+body { margin: 0; height: 100vh; display: flex; flex-direction: column; }
+.preview-toolbar { padding: 14px 22px; background: #fff; border-bottom: 1px solid #d4dfd9; display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; }
+.preview-title strong { display: block; font-size: 15px; }
+.preview-title span { color: #23775e; margin-left: 8px; font-weight: 500; }
+.preview-title small { display: block; margin-top: 5px; color: #64776d; }
+.preview-controls { display: flex; align-items: end; flex-wrap: wrap; gap: 10px; }
+.preview-controls label { display: flex; flex-direction: column; gap: 4px; font-size: 11px; }
+select, button { padding: 7px 10px; border-radius: 7px; border: 1px solid #cdd8d1; color: inherit; background: #fff; font: inherit; }
+button { cursor: pointer; }
+.preview-stage { display: flex; justify-content: center; flex: 1; min-height: 0; padding: 16px; }
+iframe { width: 100%; max-width: 100%; height: 100%; border: 1px solid #cdd8d1; border-radius: 10px; background: #fff; box-shadow: 0 8px 25px #1b392b12; }
+[data-theme="dark"] { color: #e3ece8; background: #17221d; }
+[data-theme="dark"] .preview-toolbar, [data-theme="dark"] select, [data-theme="dark"] button { background: #24342c; border-color: #425349; }
+[data-theme="dark"] .preview-title small, [data-theme="dark"] .preview-title span { color: #a9c7b7; }
+@media (max-width: 600px) { .preview-toolbar { padding: 10px; } .preview-stage { padding: 5px; } }
