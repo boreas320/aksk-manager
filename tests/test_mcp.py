@@ -47,6 +47,17 @@ async def test_protocol_tool_call_preserves_private_meta(api, native):
     assert TOKEN not in json.dumps([c.model_dump() for c in response.content])
 
 
+async def test_search_connection_matches_remain_app_only(api, native):
+    r = await create(native, kind="database", values=DB_VALUES)
+    response = await mcp.call_tool("ui_list", {"query": DB_VALUES["host"]})
+    assert [i["id"] for i in response.meta["private"]["data"]] == [r["id"]]
+    assert response.structuredContent is None
+    assert r["id"] not in json.dumps([c.model_dump() for c in response.content])
+    assert all(v not in response.model_dump_json() for v in DB_VALUES.values())
+    assert (await api.list_secrets(DB_VALUES["host"])).structuredContent["data"] == []
+    assert (await api.ui_list(query=DB_VALUES["password"])).meta["private"]["data"] == []
+
+
 async def test_run_tool_returns_safe_completed_result(api, native):
     r = await create(native)
     result = await api.run_with_secrets(

@@ -74,6 +74,7 @@ function Manager() {
     action: "trash" | "purge";
   } | null>(null);
   const [working, setWorking] = useState(false);
+  const [matchingIds, setMatchingIds] = useState<Set<string> | null>(null);
   const generation = useRef(0);
   async function refresh(targetTrash = trash) {
     const id = ++generation.current;
@@ -82,9 +83,13 @@ function Manager() {
     try {
       await call("ui_status");
       const result = await call<Secret[]>("ui_list", { trash: targetTrash });
+      const matches = query.trim()
+        ? await call<Secret[]>("ui_list", { trash: targetTrash, query })
+        : null;
       if (id !== generation.current) return;
       setAvailable(true);
       setItems(result);
+      setMatchingIds(matches ? new Set(matches.map((i) => i.id)) : null);
       setSelected((old) =>
         old ? (result.find((i) => i.id === old.id) ?? null) : null,
       );
@@ -115,8 +120,13 @@ function Manager() {
     };
   }, []);
   useEffect(() => {
-    if (ready) void refresh(trash);
-  }, [ready, trash]);
+    if (!ready) return;
+    const timer = setTimeout(() => void refresh(trash), query.trim() ? 200 : 0);
+    return () => {
+      clearTimeout(timer);
+      generation.current++;
+    };
+  }, [ready, trash, query]);
   useEffect(() => {
     if (!notice) return;
     const t = setTimeout(() => setNotice(""), 5000);
@@ -128,13 +138,9 @@ function Manager() {
         (i) =>
           (!kind || i.kind === kind) &&
           (!provider || i.provider === provider) &&
-          (!query ||
-            [i.name, i.account, i.environment, i.provider, ...i.tags]
-              .join(" ")
-              .toLowerCase()
-              .includes(query.toLowerCase())),
+          (!matchingIds || matchingIds.has(i.id)),
       ),
-    [items, kind, provider, query],
+    [items, kind, provider, matchingIds],
   );
   async function change(item: Secret, action: "trash" | "restore" | "purge") {
     setWorking(true);
@@ -293,7 +299,8 @@ function Manager() {
             <Search size={17} />
             <input
               aria-label="搜索密钥"
-              placeholder="搜索名称、账号或标签"
+              placeholder="搜索全部信息（不含密钥值）"
+              title="可搜索名称、厂商、账号、环境、标签、备注、类型、字段名及数据库连接信息；多个关键词用空格分隔。"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
             />

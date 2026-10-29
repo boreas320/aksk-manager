@@ -37,7 +37,7 @@
     },
     {
       "name": "list_secrets",
-      "description": "Search active secret metadata by name, account, provider, environment or tag. No secret values.",
+      "description": "Search all active metadata including notes, kind, field names, IDs and dates.\n\n    Whitespace-separated terms match across fields, ignoring case, accents and width.\n    Credential and database connection values are not searched or returned.\n    ",
       "inputSchema": {
         "properties": {
           "query": {
@@ -190,13 +190,18 @@
     },
     {
       "name": "ui_list",
-      "description": "App only: list active or trashed credential metadata.",
+      "description": "App only: search metadata and non-password database connection fields locally.\n\n    Returns metadata only. Never searches passwords, keys or token values.\n    ",
       "inputSchema": {
         "properties": {
           "trash": {
             "default": false,
             "title": "Trash",
             "type": "boolean"
+          },
+          "query": {
+            "default": "",
+            "title": "Query",
+            "type": "string"
           }
         },
         "title": "ui_listArguments",

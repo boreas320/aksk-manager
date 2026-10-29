@@ -118,7 +118,11 @@ async def read_resource(uri):
 
 @mcp.tool(annotations=READ)
 async def list_secrets(query: str = "") -> CallToolResult:
-    """Search active secret metadata by name, account, provider, environment or tag. No secret values."""
+    """Search all active metadata including notes, kind, field names, IDs and dates.
+
+    Whitespace-separated terms match across fields, ignoring case, accents and width.
+    Credential and database connection values are not searched or returned.
+    """
     return await invoke("list", {"query": query})
 
 
@@ -164,9 +168,12 @@ async def ui_status() -> CallToolResult:
 
 
 @mcp.tool(annotations=READ, meta=APP_ONLY)
-async def ui_list(trash: bool = False) -> CallToolResult:
-    """App only: list active or trashed credential metadata."""
-    return await invoke("list", {"trash": trash}, private=True)
+async def ui_list(trash: bool = False, query: str = "") -> CallToolResult:
+    """App only: search metadata and non-password database connection fields locally.
+
+    Returns metadata only. Never searches passwords, keys or token values.
+    """
+    return await invoke("ui_list", {"trash": trash, "query": query}, private=True)
 
 
 @mcp.tool(annotations=WRITE, meta=APP_ONLY)

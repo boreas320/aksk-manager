@@ -38,6 +38,13 @@ async def main(kind="token"):
         )
         revealed = await bridge.call("reveal", {"id": record["id"], "revision": record["revision"]})
         assert revealed["values"] == values
+        if kind == "database":
+            query = record["name"] + " " + values["host"] + " " + values["username"]
+            matches = await independent.call("ui_list", {"query": query})
+            assert [item["id"] for item in matches] == [record["id"]]
+            assert await independent.call("list", {"query": query}) == []
+        assert await independent.call("ui_list", {"query": record["name"] + " " + value}) == []
+        print("PASS: 本地搜索、连接字段隔离和秘密值排除。")
         updated = await bridge.call("save", {**record, "name": record["name"] + " updated"})
         readback = await independent.call("metadata", {"id": updated["id"]})
         assert readback["revision"] == updated["revision"]

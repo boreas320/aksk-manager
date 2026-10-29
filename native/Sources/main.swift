@@ -41,6 +41,32 @@ struct Record: Codable {
   var values: [String: String]
   var updatedAt: String
   var deletedAt: String?
+  func matches(_ query: String, connectionFields: Bool) -> Bool {
+    func normalize(_ text: String) -> String {
+      text.folding(options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive],
+                   locale: Locale(identifier: "en_US_POSIX"))
+    }
+    let terms = normalize(query).split(whereSeparator: { $0.isWhitespace })
+    if terms.isEmpty { return true }
+    let kinds = ["aksk": "云访问密钥 AK/SK AK SK", "token": "API Token 令牌",
+                 "database": "数据库连接 database"]
+    let labels = ["access_key": "Access Key", "secret_key": "Secret Key",
+                  "session_token": "Session Token", "token": "API Token",
+                  "engine": "数据库类型", "host": "主机", "port": "端口",
+                  "database": "数据库名", "username": "用户名", "password": "密码",
+                  "ssl_mode": "TLS 模式 SSL"]
+    var text = [id, revision, kind, kinds[kind] ?? kind, name, provider, account,
+                environment, notes, updatedAt, deletedAt ?? "", expiresAt ?? ""] + tags
+    for field in values.keys { text += [field, labels[field] ?? field] }
+    // Never create a password/token matching oracle. Connection values stay local.
+    if connectionFields && kind == "database" {
+      for field in ["engine", "host", "port", "database", "username", "ssl_mode"] {
+        if let value = values[field] { text.append(value) }
+      }
+    }
+    let haystack = normalize(text.joined(separator: " "))
+    return terms.allSatisfy { haystack.contains($0) }
+  }
   var metadata: [String: Any] {
     [
       "id": id, "revision": revision, "kind": kind, "name": name, "provider": provider,
@@ -420,14 +446,12 @@ final class Service {
         "keychain": "available", "sync": "managed_by_icloud", "remote_verified": false,
         "version": "0.1.0",
       ]
-    case "list":
+    case "list", "ui_list":
       let trash = p["trash"] as? Bool ?? false
-      let query = (p["query"] as? String ?? "").lowercased()
+      let query = p["query"] as? String ?? ""
       return try store.all().filter {
         ($0.deletedAt != nil) == trash
-          && (query.isEmpty
-            || ([$0.name, $0.provider, $0.account, $0.environment] + $0.tags).joined(separator: " ")
-              .lowercased().contains(query))
+          && $0.matches(query, connectionFields: method == "ui_list")
       }.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }.map(\.metadata)
     case "metadata": return try store.read(required(p, "id")).metadata
     case "save": return try withStoreLock { try save(p, store: store).metadata }

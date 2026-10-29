@@ -20,7 +20,8 @@ const fixture = {
 
 async function host(
   page: Page,
-  { empty = false, blocked = false, conflict = false, dark = false } = {},
+  { empty = false, blocked = false, conflict = false, dark = false,
+    searchResults = {} as Record<string, { ids: string[]; delay?: number }> } = {},
 ) {
   await page.route("https://aksk.test/", (route) =>
     route.fulfill({
@@ -30,7 +31,7 @@ async function host(
   );
   await page.goto("https://aksk.test/");
   await page.evaluate(
-    ({ html, fixture, empty, blocked, conflict, dark }) => {
+    ({ html, fixture, empty, blocked, conflict, dark, searchResults }) => {
       const frame = document.querySelector("iframe")!;
       let items: any[] = empty
         ? []
@@ -66,6 +67,7 @@ async function host(
           (window as any).contextLeaks.push(m.params);
         if (m.id === undefined) return;
         let result: any = {};
+        let delay = 0;
         if (m.method === "ui/initialize")
           result = {
             protocolVersion: "2026-01-26",
@@ -91,8 +93,16 @@ async function host(
               };
             else data = { keychain: "available", remote_verified: false };
           }
-          if (name === "ui_list")
+          if (name === "ui_list") {
             data = items.filter((i) => !!i.deletedAt === !!a.trash);
+            if (a.query) {
+              const answer = searchResults[a.query];
+              data = answer
+                ? data.filter((i: any) => answer.ids.includes(i.id))
+                : data.filter((i: any) => JSON.stringify(i).toLowerCase().includes(a.query.toLowerCase()));
+              delay = answer?.delay ?? 0;
+            }
+          }
           if (name === "get_secret_metadata")
             data = items.find((i) => i.id === a.secret_id);
           if (name === "ui_reveal")
@@ -147,14 +157,14 @@ async function host(
               }
             : { content: [], structuredContent: payload };
         }
-        frame.contentWindow!.postMessage(
+        setTimeout(() => frame.contentWindow!.postMessage(
           { jsonrpc: "2.0", id: m.id, result },
           "*",
-        );
+        ), delay);
       });
       frame.srcdoc = html;
     },
-    { html, fixture, empty, blocked, conflict, dark },
+    { html, fixture, empty, blocked, conflict, dark, searchResults },
   );
   const ui = page.frameLocator("iframe");
   await expect(ui.locator(".status-strip")).toContainText(
@@ -321,4 +331,29 @@ test("dark theme follows the host", async ({ page }) => {
   const ui = await host(page, { dark: true });
   await expect(ui.locator("html")).toHaveAttribute("data-theme", "dark");
   await page.screenshot({ path: "../docs/ui-dark.png", fullPage: true });
+});
+
+test("server search handles hidden connection fields and ignores stale responses", async ({ page }) => {
+  const ui = await host(page, { searchResults: {
+    "db.example.invalid": { ids: ["demo-3"], delay: 800 },
+    "备注词": { ids: ["demo-2"] },
+    "synthetic_reader 5432": { ids: ["demo-3"] },
+  } });
+  await ui.getByLabel("搜索密钥").fill("db.example.invalid");
+  await expect.poll(() => page.evaluate(() => (window as any).calls.some(
+    (c: any) => c.name === "ui_list" && c.args.query === "db.example.invalid"))).toBe(true);
+  await ui.getByLabel("搜索密钥").fill("备注词");
+  await expect(ui.locator(".secret-row")).toHaveCount(1);
+  await expect(ui.locator(".secret-row")).toContainText("代码仓库访问");
+  await page.waitForTimeout(1000);
+  await expect(ui.locator(".secret-row")).toContainText("代码仓库访问");
+  await ui.getByLabel("搜索密钥").fill("synthetic_reader 5432");
+  await expect(ui.locator(".secret-row")).toContainText("测试环境资源查询");
+  // Filtering options and library counts still derive from the full list.
+  await expect(ui.getByLabel("筛选厂商").locator("option")).toHaveCount(4);
+  await ui.getByLabel("搜索密钥").fill("");
+  await expect(ui.locator(".secret-row")).toHaveCount(3);
+  expect(await page.evaluate(() => (window as any).contextLeaks)).toEqual([]);
+  expect(await page.evaluate(() => (window as any).calls.some(
+    (c: any) => c.name === "ui_reveal"))).toBe(false);
 });
