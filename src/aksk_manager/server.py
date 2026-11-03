@@ -109,7 +109,9 @@ async def read_resource(uri):
                 },
                 "openai/ui": {
                     "preferredDisplayMode": "fullscreen",
-                    "availableDisplayModes": ["fullscreen", "inline"],
+                    # Credential editing is a workspace, not an ephemeral chat card.
+                    # Inline frames may be suspended when the chat scrolls offscreen.
+                    "availableDisplayModes": ["fullscreen"],
                 },
             },
         )

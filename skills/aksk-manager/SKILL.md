@@ -9,6 +9,24 @@ Use `list_secrets` and `get_secret_metadata` to locate the intended account, env
 If several entries match a consequential operation, ask the user to identify the intended account.
 Ask users to add or update secrets through **更多工具 → AKSK Manager**, never through chat.
 
+## Panel lifecycle and UI recovery
+
+The credential editor uses the host's fullscreen workspace, not an inline chat card.
+A UI automation timeout alone does not prove the panel or native helper crashed.
+Before asking for a reopen, inspect the existing app tabs and read the intended
+panel again. Use short action batches with bounded locator timeouts, and inspect
+the resulting state between dependent actions. Never repeat a write whose outcome
+is unknown; verify metadata and revision first. Do not confuse IAB browser-route
+errors with MCP Apps failures, or another instance's offscreen-suspension log with
+the panel being edited.
+
+Installing an update does not hot-replace an existing chat's plugin process or
+open UI. Verify the loaded version separately from the installed package. Do not
+claim a host lifecycle fix from preview tests or installation alone, and do not
+modify host binaries or add background heartbeats to defeat host suspension.
+
+## Credential use
+
 Use `run_with_secrets` with an argument array, an absolute working directory and bindings of
 environment variable names to `{secret_id, field}`. Fields are `access_key`, `secret_key`,
 `session_token`, or `token`. For AWS, bind `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, and,

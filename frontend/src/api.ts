@@ -27,7 +27,12 @@ export class ToolError extends Error {
     super(message);
   }
 }
-export const app = new App({ name: "AKSK Manager", version: "0.1.0" });
+// Keep the initialization handshake aligned with the resource metadata. A host
+// must not move an active credential editor into an offscreen inline chat card.
+export const app = new App(
+  { name: "AKSK Manager", version: "0.1.0" },
+  { availableDisplayModes: ["fullscreen"] },
+);
 const requestOptions = { timeout: 15000, maxTotalTimeout: 15000 };
 const writes = new Set(["ui_save", "ui_trash", "ui_restore", "ui_purge"]);
 function theme() {

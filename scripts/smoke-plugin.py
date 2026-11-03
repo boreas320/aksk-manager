@@ -24,7 +24,12 @@ async def main(root: Path):
         resource = await session.read_resource("ui://aksk-manager/vault")
         assert "AKSK Manager" in resource.contents[0].text
         assert resource.contents[0].mimeType == "text/html;profile=mcp-app"
+        assert resource.contents[0].meta["openai/ui"] == {
+            "preferredDisplayMode": "fullscreen",
+            "availableDisplayModes": ["fullscreen"],
+        }, "Credential management must not fall back to a suspendable inline card"
         print(f"PASS: 实际安装包 stdio 启动、{len(tools)} 个工具发现、会话入口与内嵌界面资源。")
+        print("PASS: 实际 resources/read 声明仅支持独立面板 fullscreen。")
         status = await session.call_tool("ui_status", {})
         private = status.meta["private"]
         if private["ok"]:

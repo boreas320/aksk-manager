@@ -40,6 +40,7 @@ export function mountPreviewHost(options: PreviewOptions = {}) {
   const testWindow = window as typeof window & {
     calls: unknown[];
     contextLeaks: unknown[];
+    appCapabilities?: { availableDisplayModes?: string[] };
     setPreviewDropReplies: (names: string[]) => void;
   };
   testWindow.calls = [];
@@ -127,12 +128,15 @@ export function mountPreviewHost(options: PreviewOptions = {}) {
     if (m.id === undefined) return;
     let result: any = {};
     let delay = 0;
-    if (m.method === "ui/initialize") result = {
+    if (m.method === "ui/initialize") {
+      testWindow.appCapabilities = m.params.appCapabilities;
+      result = {
       protocolVersion: "2026-01-26", hostInfo: { name: "AKSK local preview", version: "1.0.0" },
       hostCapabilities: { serverTools: {}, serverResources: {} },
       hostContext: { theme: dark ? "dark" : "light", displayMode: "fullscreen",
         availableDisplayModes: ["fullscreen"] },
-    };
+      };
+    }
     if (m.method === "tools/call") {
       const { name, arguments: a = {} } = m.params;
       // Test instrumentation exists only in this mock host's memory.

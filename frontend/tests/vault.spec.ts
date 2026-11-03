@@ -23,6 +23,16 @@ async function host(
   return ui;
 }
 
+test("initialization keeps the credential editor out of suspendable inline cards", async ({ page }) => {
+  const ui = await host(page);
+  expect(await page.evaluate(() => (window as any).appCapabilities.availableDisplayModes))
+    .toEqual(["fullscreen"]);
+  await ui.locator(".secret-row").first().click();
+  await ui.getByLabel("编辑密钥").click();
+  await expect(ui.getByRole("dialog", { name: "编辑密钥" })).toBeVisible();
+  expect(await page.evaluate(() => (window as any).contextLeaks)).toEqual([]);
+});
+
 test("search, filtering and details use metadata without revealing secrets", async ({
   page,
 }) => {

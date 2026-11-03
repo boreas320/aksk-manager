@@ -18,6 +18,16 @@ async def test_tools_separate_app_management_from_agent_execution():
     assert not any("reveal" in name and not name.startswith("ui_") for name in tools)
 
 
+async def test_resource_keeps_credential_management_in_a_fullscreen_workspace():
+    from aksk_manager.server import URI, read_resource
+
+    resource = (await read_resource(URI))[0]
+    assert resource.meta["openai/ui"] == {
+        "preferredDisplayMode": "fullscreen",
+        "availableDisplayModes": ["fullscreen"],
+    }
+
+
 async def test_private_reveal_never_in_model_visible_fields(api, native):
     r = await create(native)
     revealed = await api.ui_reveal(r["id"], r["revision"])
