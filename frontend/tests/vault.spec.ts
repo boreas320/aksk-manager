@@ -158,6 +158,76 @@ test("conflicts retain the form and display an actionable error", async ({
   await expect(ui.getByLabel("名称（必填）", { exact: true })).toHaveValue("冲突修改");
 });
 
+test("editing and switching kind need no metadata RPC and preserve the record ID", async ({ page }) => {
+  const ui = await host(page, { dropReplies: ["get_secret_metadata"] });
+  await ui.getByRole("button", { name: "API Token", exact: true }).click();
+  await ui.locator(".secret-row").click();
+  await ui.getByLabel("编辑密钥").click();
+  const dialog = ui.getByRole("dialog", { name: "编辑密钥" });
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole("button", { name: "数据库连接", exact: true }).click();
+  await dialog.getByLabel("数据库类型（必填）", { exact: true }).fill("mysql");
+  await dialog.getByLabel("主机（必填）", { exact: true }).fill("synthetic.invalid");
+  await dialog.getByLabel("用户名（选填）", { exact: true }).fill("synthetic_reader");
+  await dialog.getByLabel("密码（选填）", { exact: true }).fill("SYNTHETIC_PASSWORD");
+  await dialog.getByRole("button", { name: "保存密钥" }).click();
+  await expect(dialog).toHaveCount(0);
+  const calls = await page.evaluate(() => (window as any).calls);
+  expect(calls.some((c: any) => c.name === "get_secret_metadata")).toBe(false);
+  const record = calls.find((c: any) => c.name === "ui_save").args.record;
+  expect(record.id).toBe("demo-2");
+  expect(record.revision).toBe("rev-1");
+  expect(record.kind).toBe("database");
+  expect(record.values.token).toBeUndefined();
+  await ui.getByRole("button", { name: "全部密钥 3", exact: true }).click();
+  await expect(ui.locator(".secret-row")).toHaveCount(3);
+  expect(await page.evaluate(() => (window as any).contextLeaks)).toEqual([]);
+});
+
+test("lost save acknowledgement stops the spinner and prevents duplicate submission", async ({ page }) => {
+  const ui = await host(page, { empty: true, dropReplies: ["ui_save"] });
+  await page.clock.install();
+  await ui.getByRole("button", { name: "添加密钥", exact: true }).first().click();
+  const dialog = ui.getByRole("dialog");
+  await dialog.getByRole("button", { name: "API Token", exact: true }).click();
+  await dialog.getByLabel("名称（必填）", { exact: true }).fill("应只保存一次");
+  await dialog.getByLabel("API Token（必填）", { exact: true }).fill("SYNTHETIC_LOST_REPLY");
+  await dialog.getByRole("button", { name: "保存密钥" }).click();
+  await expect.poll(() => page.evaluate(() => (window as any).calls.filter((c: any) => c.name === "ui_save").length)).toBe(1);
+  await page.clock.fastForward(16000);
+  await expect(dialog.getByRole("alert")).toContainText("可能已经保存");
+  await expect(dialog.getByRole("button", { name: "保存结果待核对" })).toBeDisabled();
+  await expect(dialog.getByRole("button", { name: "取消", exact: true })).toBeEnabled();
+  await dialog.getByRole("button", { name: "取消", exact: true }).click();
+  await expect(ui.getByRole("button", { name: "添加密钥", exact: true }).first()).toBeDisabled();
+  await ui.getByLabel("刷新", { exact: true }).click();
+  await page.clock.runFor(100);
+  await expect(ui.locator(".secret-row")).toHaveCount(1);
+  await expect(ui.locator(".secret-row")).toContainText("应只保存一次");
+  expect(await page.evaluate(() => (window as any).calls.filter((c: any) => c.name === "ui_save").length)).toBe(1);
+  expect(await page.evaluate(() => (window as any).contextLeaks)).toEqual([]);
+});
+
+test("a dropped refresh retains metadata, disables writes, and can recover", async ({ page }) => {
+  const ui = await host(page);
+  await page.clock.install();
+  await page.evaluate(() => (window as any).setPreviewDropReplies(["ui_list"]));
+  await ui.getByLabel("刷新", { exact: true }).click();
+  await expect.poll(() => page.evaluate(() => (window as any).calls.filter((c: any) => c.name === "ui_list").length)).toBe(2);
+  await page.clock.fastForward(16000);
+  await expect(ui.getByRole("alert")).toContainText("连接未响应");
+  await expect(ui.locator(".secret-row")).toHaveCount(3);
+  await expect(ui.getByRole("button", { name: "添加密钥", exact: true })).toBeDisabled();
+  await ui.locator(".secret-row").first().click();
+  await expect(ui.getByLabel("编辑密钥")).toBeDisabled();
+  await page.evaluate(() => (window as any).setPreviewDropReplies([]));
+  await ui.getByLabel("刷新", { exact: true }).click();
+  await page.clock.runFor(100);
+  await expect(ui.locator(".status-strip")).toContainText("本机钥匙串可访问");
+  await expect(ui.getByLabel("编辑密钥")).toBeEnabled();
+  await expect(ui.getByRole("alert")).toHaveCount(0);
+});
+
 for (const size of [
   { width: 1440, height: 900 },
   { width: 768, height: 1024 },

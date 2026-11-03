@@ -20,7 +20,7 @@ import {
   Fingerprint,
   Check,
 } from "lucide-react";
-import { call, connect, Secret } from "./api";
+import { call, connect, Secret, ToolError } from "./api";
 import "@openai/mcp-extensions/app/styles.css";
 import "./style.css";
 
@@ -74,6 +74,7 @@ function Manager() {
     action: "trash" | "purge";
   } | null>(null);
   const [working, setWorking] = useState(false);
+  const [unconfirmed, setUnconfirmed] = useState(false);
   const [matchingIds, setMatchingIds] = useState<Set<string> | null>(null);
   const generation = useRef(0);
   async function refresh(targetTrash = trash) {
@@ -88,6 +89,7 @@ function Manager() {
         : null;
       if (id !== generation.current) return;
       setAvailable(true);
+      setUnconfirmed(false);
       setItems(result);
       setMatchingIds(matches ? new Set(matches.map((i) => i.id)) : null);
       setSelected((old) =>
@@ -96,8 +98,8 @@ function Manager() {
     } catch (e) {
       if (id !== generation.current) return;
       setAvailable(false);
-      setItems([]);
-      setSelected(null);
+      // Keep the last metadata snapshot visible when the host drops a request.
+      // Mutations remain disabled until a successful refresh.
       setError((e as Error).message);
     } finally {
       if (id === generation.current) setChecking(false);
@@ -161,6 +163,10 @@ function Manager() {
             : "已移入回收站，iCloud 将同步此变更。",
       );
     } catch (e) {
+      if (e instanceof ToolError && e.code === "WRITE_UNCONFIRMED") {
+        setUnconfirmed(true);
+        setConfirm(null);
+      }
       setError((e as Error).message);
     } finally {
       setWorking(false);
@@ -256,7 +262,7 @@ function Manager() {
           {!trash && (
             <button
               className="primary"
-              disabled={!available || checking}
+              disabled={!available || checking || unconfirmed}
               onClick={() => setEditing("new")}
             >
               <Plus size={17} />
@@ -269,9 +275,11 @@ function Manager() {
           <span>
             {checking
               ? "正在检查本机钥匙串…"
+              : unconfirmed
+                ? "操作结果待核对，请刷新"
               : available
                 ? "本机钥匙串可访问"
-                : "等待本地组件就绪"}
+                : items.length ? "连接未确认，显示上次读取的记录" : "等待本地组件就绪"}
           </span>
           <span className="status-detail">同步由 iCloud 钥匙串管理</span>
           <button
@@ -389,7 +397,7 @@ function Manager() {
                         : "添加云访问密钥或 API Token，无需设置额外密码。"}
                 </p>
                 {available && !trash && !items.length && (
-                  <button className="primary" onClick={() => setEditing("new")}>
+                  <button className="primary" disabled={checking || unconfirmed} onClick={() => setEditing("new")}>
                     <Plus size={16} />
                     添加密钥
                   </button>
@@ -405,17 +413,9 @@ function Manager() {
               key={`${selected.id}:${selected.revision}`}
               item={selected}
               close={() => setSelected(null)}
-              edit={async () => {
-                try {
-                  setEditing(
-                    await call<Secret>("get_secret_metadata", {
-                      secret_id: selected.id,
-                    }),
-                  );
-                } catch (e) {
-                  setError((e as Error).message);
-                }
-              }}
+              // The list already contains metadata + revision. The native save
+              // checks that revision atomically; opening an editor needs no RPC.
+              edit={() => setEditing(selected)}
               change={(action) =>
                 action === "restore"
                   ? change(selected, action)
@@ -423,7 +423,7 @@ function Manager() {
               }
               notify={setNotice}
               error={setError}
-              busy={working}
+              busy={working || !available || checking || unconfirmed}
             />
           )}
         </div>
@@ -436,6 +436,7 @@ function Manager() {
         <Editor
           item={editing === "new" ? null : editing}
           close={() => setEditing(null)}
+          uncertain={() => setUnconfirmed(true)}
           saved={async () => {
             setEditing(null);
             await refresh();
@@ -575,7 +576,7 @@ function Detail({
         </button>
         <span>密钥详情</span>
         {!item.deletedAt && (
-          <button className="icon-button" aria-label="编辑密钥" onClick={edit}>
+          <button className="icon-button" aria-label="编辑密钥" disabled={busy} onClick={edit}>
             <Pencil size={16} />
           </button>
         )}
@@ -678,10 +679,12 @@ function Editor({
   item,
   close,
   saved,
+  uncertain,
 }: {
   item: Secret | null;
   close: () => void;
   saved: () => void;
+  uncertain: () => void;
 }) {
   const [form, setForm] = useState({
     name: item?.name ?? "",
@@ -697,6 +700,8 @@ function Editor({
     [values, setValues] = useState<Record<string, string>>({});
   const [error, setError] = useState(""),
     [saving, setSaving] = useState(false);
+  const [unconfirmed, setUnconfirmed] = useState(false);
+  const submitting = useRef(false);
   const fields =
     form.kind === "aksk"
       ? ["access_key", "secret_key", "session_token"]
@@ -706,6 +711,8 @@ function Editor({
     setForm((old) => ({ ...old, [key]: value }));
   async function submit(e: React.FormEvent) {
     e.preventDefault();
+    if (submitting.current || unconfirmed) return;
+    submitting.current = true;
     setSaving(true);
     setError("");
     try {
@@ -729,8 +736,13 @@ function Editor({
       setValues({});
       saved();
     } catch (e) {
+      if (e instanceof ToolError && e.code === "WRITE_UNCONFIRMED") {
+        setUnconfirmed(true);
+        uncertain();
+      }
       setError((e as Error).message);
     } finally {
+      submitting.current = false;
       setSaving(false);
     }
   }
@@ -901,8 +913,8 @@ function Editor({
           <button type="button" disabled={saving} onClick={close}>
             取消
           </button>
-          <button className="primary" disabled={saving}>
-            {saving ? "正在保存…" : "保存密钥"}
+          <button className="primary" disabled={saving || unconfirmed}>
+            {saving ? "正在保存…" : unconfirmed ? "保存结果待核对" : "保存密钥"}
           </button>
         </div>
       </form>

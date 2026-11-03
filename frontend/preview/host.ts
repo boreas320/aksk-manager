@@ -9,6 +9,7 @@ export type PreviewOptions = {
   conflict?: boolean;
   dark?: boolean;
   searchResults?: Record<string, { ids: string[]; delay?: number }>;
+  dropReplies?: string[];
 };
 
 export function mountPreviewHost(options: PreviewOptions = {}) {
@@ -35,9 +36,15 @@ export function mountPreviewHost(options: PreviewOptions = {}) {
   let dark = options.dark ?? false;
   let blocked = options.blocked ?? false;
   let conflict = options.conflict ?? false;
-  const testWindow = window as typeof window & { calls: unknown[]; contextLeaks: unknown[] };
+  let dropReplies = options.dropReplies ?? [];
+  const testWindow = window as typeof window & {
+    calls: unknown[];
+    contextLeaks: unknown[];
+    setPreviewDropReplies: (names: string[]) => void;
+  };
   testWindow.calls = [];
   testWindow.contextLeaks = [];
+  testWindow.setPreviewDropReplies = (names) => { dropReplies = names; };
   const metadata = ({ values, ...item }: Item) => ({ ...item, fields: Object.keys(values).sort() });
   const normalize = (s: string) => s.normalize("NFKD").replace(/\p{M}/gu, "").toLowerCase();
   const labels: Record<string, string> = { aksk: "云访问密钥 AK/SK AK SK", token: "API Token 令牌",
@@ -137,6 +144,8 @@ export function mountPreviewHost(options: PreviewOptions = {}) {
         ? { content: [{ type: "text", text: "界面操作完成。" }], _meta: { private: payload }, isError: !payload.ok }
         : { content: [], structuredContent: payload, isError: !payload.ok };
       delay = name === "ui_list" ? options.searchResults?.[a.query]?.delay ?? 0 : 0;
+      // Simulate a successful operation whose acknowledgement is lost in the host.
+      if (dropReplies.includes(name)) return;
     }
     const timer = setTimeout(() => {
       timers.delete(timer);
