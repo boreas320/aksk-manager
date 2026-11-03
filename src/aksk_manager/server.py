@@ -4,10 +4,12 @@ import json
 import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import Literal
 
 from mcp.server.fastmcp import FastMCP
 from mcp.server.lowlevel.helper_types import ReadResourceContents
 from mcp.types import CallToolResult, Icon, TextContent, ToolAnnotations
+from pydantic import BaseModel, ConfigDict, Field
 
 from .bridge import BridgeError, NativeBridge
 
@@ -33,7 +35,8 @@ mcp = FastMCP(
     lifespan=lifespan,
     instructions="Find credential metadata and use secret references in local commands. "
     "Never ask for secrets in chat or try to print, encode, export, or transmit them. "
-    "Ask the user to enter credentials in the AKSK Manager app. "
+    "Use update_secret for authorized metadata edits and native reference-based field migration. "
+    "New plaintext credentials must be entered in the AKSK Manager app, never in tool arguments. "
     "Command execution has side effects and must respect the user's task and host policies.",
 )
 URI = "ui://aksk-manager/vault"
@@ -132,6 +135,58 @@ async def list_secrets(query: str = "") -> CallToolResult:
 async def get_secret_metadata(secret_id: str) -> CallToolResult:
     """Get a credential's metadata, revision and available field names without revealing secrets."""
     return await invoke("metadata", {"id": secret_id})
+
+
+CredentialField = Literal[
+    "access_key", "secret_key", "session_token", "token", "engine", "host", "port",
+    "database", "username", "password", "ssl_mode",
+]
+
+
+class MetadataChanges(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    name: str | None = None
+    kind: Literal["aksk", "token", "database"] | None = None
+    provider: str | None = None
+    account: str | None = None
+    environment: str | None = None
+    tags: list[str] | None = None
+    notes: str | None = None
+
+
+class CredentialReference(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    secret_id: str
+    revision: str
+    field: CredentialField
+    json_path: list[str] = Field(default_factory=list, max_length=16)
+
+
+@mcp.tool(annotations=WRITE)
+async def update_secret(
+    secret_id: str,
+    expected_revision: str,
+    changes: MetadataChanges | None = None,
+    field_refs: dict[CredentialField, CredentialReference] | None = None,
+    remove_fields: list[CredentialField] | None = None,
+) -> CallToolResult:
+    """Update one existing credential in place for a user-authorized task; returns metadata only.
+
+    Read metadata first and pass its revision. changes edits non-secret metadata; omitted/null
+    changes preserve it. Never put credentials or connection values in metadata.
+    field_refs maps destination fields to existing {secret_id, revision, field, json_path?}.
+    A json_path is an ordered list of object keys selecting a string inside a JSON credential;
+    resolution occurs only in the native helper. No plaintext values are accepted or returned.
+    Same-kind edits preserve unmentioned values. Kind changes require all required fields via
+    references and discard old-kind fields. remove_fields clears optional fields explicitly.
+    No creation or deletion. On conflict/unknown outcome, read metadata before any retry.
+    """
+    return await invoke("update", {
+        "id": secret_id, "revision": expected_revision,
+        "changes": changes.model_dump(exclude_none=True) if changes else {},
+        "field_refs": {k: v.model_dump() for k, v in (field_refs or {}).items()},
+        "remove_fields": remove_fields or [],
+    })
 
 
 @mcp.tool(annotations=EXEC)

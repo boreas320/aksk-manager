@@ -178,6 +178,64 @@ func withStoreLock<T>(_ action: () throws -> T) throws -> T {
   defer { flock(fd, LOCK_UN) }
   return try action()
 }
+// Agent updates resolve references under the same local lock as revision checks
+// and the final write. Plaintext never crosses the native boundary on this path.
+func update(_ p: [String: Any], store: Storage) throws -> Record {
+  guard Set(p.keys).isSubset(of: ["id", "revision", "changes", "field_refs", "remove_fields"]),
+    let changes = p["changes"] as? [String: Any],
+    Set(changes.keys).isSubset(of: ["name", "kind", "provider", "account", "environment", "tags", "notes"]),
+    let refs = p["field_refs"] as? [String: [String: Any]], refs.count <= 11,
+    let removed = p["remove_fields"] as? [String], removed.count <= 11,
+    Set(removed).isDisjoint(with: Set(refs.keys)),
+    !changes.isEmpty || !refs.isEmpty || !removed.isEmpty
+  else { throw invalid() }
+  let old = try store.read(required(p, "id"))
+  guard try required(p, "revision") == old.revision else {
+    throw Failure(code: "CONFLICT", message: "目标条目已变化，请重新读取元数据后核对。")
+  }
+  guard old.deletedAt == nil else { throw Failure(code: "TRASHED", message: "目标条目已在回收站。") }
+  let fields: Set<String> = ["access_key", "secret_key", "session_token", "token", "engine",
+                             "host", "port", "database", "username", "password", "ssl_mode"]
+  guard Set(refs.keys).isSubset(of: fields), Set(removed).isSubset(of: Set(old.values.keys))
+  else { throw invalid() }
+  var record = old.metadata
+  for (key, value) in changes { record[key] = value }
+  var values = record["kind"] as? String == old.kind ? old.values : [:]
+  for field in removed { values.removeValue(forKey: field) }
+  for (destination, ref) in refs {
+    guard Set(ref.keys).isSubset(of: ["secret_id", "revision", "field", "json_path"]),
+      let path = ref["json_path"] as? [String], path.count <= 16
+    else { throw invalid() }
+    let source = try store.read(required(ref, "secret_id"))
+    guard source.deletedAt == nil else {
+      throw Failure(code: "TRASHED", message: "引用来源已在回收站。")
+    }
+    guard try required(ref, "revision") == source.revision else {
+      throw Failure(code: "CONFLICT", message: "引用来源已变化，请重新读取元数据后核对。")
+    }
+    guard let raw = source.values[try required(ref, "field")] else {
+      throw invalid("引用字段不存在。")
+    }
+    var value = raw
+    if !path.isEmpty {
+      guard let data = raw.data(using: .utf8),
+        var selected = try? JSONSerialization.jsonObject(with: data)
+      else { throw invalid("引用字段不是有效的 JSON 对象。") }
+      for key in path {
+        guard let object = selected as? [String: Any], let next = object[key] else {
+          throw invalid("JSON 引用路径不存在或不是对象字段。")
+        }
+        selected = next
+      }
+      guard let text = selected as? String else { throw invalid("JSON 引用必须指向字符串。") }
+      value = text
+    }
+    values[destination] = value
+  }
+  record["values"] = values
+  return try save(record, store: store)
+}
+
 func save(_ p: [String: Any], store: Storage) throws -> Record {
   for key in ["id", "revision", "provider", "account", "environment", "notes"] {
     if let value = p[key], !(value is String) { throw invalid() }
@@ -451,6 +509,7 @@ final class Service {
       }.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }.map(\.metadata)
     case "metadata": return try store.read(required(p, "id")).metadata
     case "save": return try withStoreLock { try save(p, store: store).metadata }
+    case "update": return try withStoreLock { try update(p, store: store).metadata }
     case "reveal":
       let r = try store.read(required(p, "id"))
       guard r.deletedAt == nil else { throw Failure(code: "TRASHED", message: "请先恢复条目。") }

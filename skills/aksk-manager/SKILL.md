@@ -1,13 +1,40 @@
 ---
 name: aksk-manager
-description: Find cloud AK/SK or API Token metadata and run authorized local commands using credential references, without putting secrets into chat.
+description: Find credential metadata, edit existing records using native field references, and run authorized local commands without putting secrets into chat.
 ---
 
 # AKSK Manager
 
 Use `list_secrets` and `get_secret_metadata` to locate the intended account, environment and fields.
 If several entries match a consequential operation, ask the user to identify the intended account.
-Ask users to add or update secrets through **更多工具 → AKSK Manager**, never through chat.
+New plaintext credentials are entered through **更多工具 → AKSK Manager**, never through chat.
+Use `update_secret` for authorized edits to existing records without UI automation.
+
+## Agent editing
+
+Read the target with `get_secret_metadata`, then supply its `id` as `secret_id` and
+its `revision` as `expected_revision`. `changes` can update name, kind, provider,
+account, environment, tags and notes. Omitted/null changes preserve metadata;
+an empty string or empty tags list clears that metadata. Never put credentials or
+connection values into these public metadata fields.
+
+`field_refs` maps destination field names to `{secret_id, revision, field}` from
+existing records. Values move only within the signed native helper, not through
+model/tool arguments or results. An optional `json_path` is an ordered list of
+object keys selecting a string inside an existing JSON credential. For example,
+use `["connection", "password"]` only when the JSON structure is known from the
+authorized source; do not probe paths to reveal contents.
+
+Same-kind edits preserve other values. A kind change replaces the old field set:
+provide references for every field to retain, including required fields for the
+new kind. `remove_fields` explicitly removes optional values. References check
+source revisions as well as the target revision under the existing local lock.
+Source records are unchanged. There is no create, trash, restore or purge action
+in this tool, and it cannot accept a new plaintext password.
+
+After a successful update, read metadata again to verify ID, type, fields and
+revision. On conflicts or timeouts, read back before retrying; never replay an
+uncertain write blindly. Local revision checks do not provide global iCloud CAS.
 
 ## Panel lifecycle and UI recovery
 

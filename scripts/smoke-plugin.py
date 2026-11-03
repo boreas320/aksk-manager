@@ -3,6 +3,7 @@
 import argparse
 import asyncio
 import json
+import uuid
 from pathlib import Path
 
 from mcp import ClientSession, StdioServerParameters
@@ -20,9 +21,14 @@ async def main(root: Path):
         tools = {t.name: t for t in (await session.list_tools()).tools}
         assert tools["aksk.open"].meta["openai/ui"]["entrypoints"] == [{"type": "thread"}]
         assert tools["ui_reveal"].meta["ui"]["visibility"] == ["app"]
+        assert "update_secret" in tools
+        assert "values" not in tools["update_secret"].inputSchema["properties"]
+        assert not (tools["update_secret"].meta or {}).get("ui", {}).get("visibility")
         assert (await session.call_tool("aksk.open", {})).isError is False
         resource = await session.read_resource("ui://aksk-manager/vault")
         assert "AKSK Manager" in resource.contents[0].text
+        assert resource.contents[0].text == (root / "src/aksk_manager/ui/index.html").read_text(), \
+            "The launcher served a stale UI from another build"
         assert resource.contents[0].mimeType == "text/html;profile=mcp-app"
         assert resource.contents[0].meta["openai/ui"] == {
             "preferredDisplayMode": "fullscreen",
@@ -36,6 +42,13 @@ async def main(root: Path):
             print("PASS: 本机钥匙串可读取；未执行真实写入或双机同步测试。")
         else:
             raise SystemExit("BLOCKED: " + private["error"]["code"] + ": " + private["error"]["message"])
+        # Exercise the installed native update dispatcher without changing an item.
+        rejected = await session.call_tool("update_secret", {
+            "secret_id": str(uuid.uuid4()), "expected_revision": "missing-record",
+            "changes": {"name": "unreachable-smoke-check"},
+        })
+        assert rejected.isError and rejected.structuredContent["error"]["code"] == "NOT_FOUND"
+        print("PASS: agent 修改入口已连接签名组件，不存在的目标被拒绝而非新建。")
 
 
 if __name__ == "__main__":

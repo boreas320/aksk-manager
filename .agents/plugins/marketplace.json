@@ -8,7 +8,7 @@
       "name": "aksk-manager",
       "source": {
         "source": "local",
-        "path": "./dist/local/7ac54979bf87/aksk-manager"
+        "path": "./dist/local/1a7c1a289838/aksk-manager"
       },
       "policy": {
         "installation": "AVAILABLE",

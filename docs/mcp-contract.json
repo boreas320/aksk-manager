@@ -78,6 +78,248 @@
       }
     },
     {
+      "name": "update_secret",
+      "description": "Update one existing credential in place for a user-authorized task; returns metadata only.\n\n    Read metadata first and pass its revision. changes edits non-secret metadata; omitted/null\n    changes preserve it. Never put credentials or connection values in metadata.\n    field_refs maps destination fields to existing {secret_id, revision, field, json_path?}.\n    A json_path is an ordered list of object keys selecting a string inside a JSON credential;\n    resolution occurs only in the native helper. No plaintext values are accepted or returned.\n    Same-kind edits preserve unmentioned values. Kind changes require all required fields via\n    references and discard old-kind fields. remove_fields clears optional fields explicitly.\n    No creation or deletion. On conflict/unknown outcome, read metadata before any retry.\n    ",
+      "inputSchema": {
+        "$defs": {
+          "CredentialReference": {
+            "additionalProperties": false,
+            "properties": {
+              "secret_id": {
+                "title": "Secret Id",
+                "type": "string"
+              },
+              "revision": {
+                "title": "Revision",
+                "type": "string"
+              },
+              "field": {
+                "enum": [
+                  "access_key",
+                  "secret_key",
+                  "session_token",
+                  "token",
+                  "engine",
+                  "host",
+                  "port",
+                  "database",
+                  "username",
+                  "password",
+                  "ssl_mode"
+                ],
+                "title": "Field",
+                "type": "string"
+              },
+              "json_path": {
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 16,
+                "title": "Json Path",
+                "type": "array"
+              }
+            },
+            "required": [
+              "secret_id",
+              "revision",
+              "field"
+            ],
+            "title": "CredentialReference",
+            "type": "object"
+          },
+          "MetadataChanges": {
+            "additionalProperties": false,
+            "properties": {
+              "name": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Name"
+              },
+              "kind": {
+                "anyOf": [
+                  {
+                    "enum": [
+                      "aksk",
+                      "token",
+                      "database"
+                    ],
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Kind"
+              },
+              "provider": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Provider"
+              },
+              "account": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Account"
+              },
+              "environment": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Environment"
+              },
+              "tags": {
+                "anyOf": [
+                  {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Tags"
+              },
+              "notes": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Notes"
+              }
+            },
+            "title": "MetadataChanges",
+            "type": "object"
+          }
+        },
+        "properties": {
+          "secret_id": {
+            "title": "Secret Id",
+            "type": "string"
+          },
+          "expected_revision": {
+            "title": "Expected Revision",
+            "type": "string"
+          },
+          "changes": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/MetadataChanges"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "field_refs": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/$defs/CredentialReference"
+                },
+                "propertyNames": {
+                  "enum": [
+                    "access_key",
+                    "secret_key",
+                    "session_token",
+                    "token",
+                    "engine",
+                    "host",
+                    "port",
+                    "database",
+                    "username",
+                    "password",
+                    "ssl_mode"
+                  ]
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Field Refs"
+          },
+          "remove_fields": {
+            "anyOf": [
+              {
+                "items": {
+                  "enum": [
+                    "access_key",
+                    "secret_key",
+                    "session_token",
+                    "token",
+                    "engine",
+                    "host",
+                    "port",
+                    "database",
+                    "username",
+                    "password",
+                    "ssl_mode"
+                  ],
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Remove Fields"
+          }
+        },
+        "required": [
+          "secret_id",
+          "expected_revision"
+        ],
+        "title": "update_secretArguments",
+        "type": "object"
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "openWorldHint": false
+      }
+    },
+    {
       "name": "run_with_secrets",
       "description": "Run a user-authorized command with credentials injected locally into its environment.\n\n    bindings maps an environment variable name to {secret_id, field}. Fields are access_key,\n    secret_key, session_token, token, or database fields engine, host, port, database,\n    username, password, ssl_mode. Bind only fields listed in metadata. Use an absolute cwd. argv is not shell-expanded;\n    explicitly invoke a shell only when needed. Returns a run id; poll get_run for output.\n    Never run commands intended to reveal or export credentials. This is not a security sandbox.\n    ",
       "inputSchema": {
