@@ -14,7 +14,7 @@ def native_binary():
     path = ROOT / ".build/aksk-helper-test"
     path.parent.mkdir(exist_ok=True)
     subprocess.run(
-        ["swiftc", "-D", "TESTING", str(ROOT / "native/Sources/main.swift"), "-o", str(path)],
+        ["swiftc", "-D", "TESTING", *map(str, sorted((ROOT / "native/Sources").glob("*.swift"))), "-o", str(path)],
         check=True,
         capture_output=True,
     )

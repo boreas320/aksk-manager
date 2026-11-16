@@ -46,7 +46,8 @@ export function mountPreviewHost(options: PreviewOptions = {}) {
   testWindow.calls = [];
   testWindow.contextLeaks = [];
   testWindow.setPreviewDropReplies = (names) => { dropReplies = names; };
-  const metadata = ({ values, ...item }: Item) => ({ ...item, fields: Object.keys(values).sort() });
+  const metadata = ({ values, ...item }: Item) => ({ ...item, fields: Object.keys(values)
+    .map(key => key === "totp" ? "otp_code" : key).sort() });
   const normalize = (s: string) => s.normalize("NFKD").replace(/\p{M}/gu, "").toLowerCase();
   const labels: Record<string, string> = { aksk: "云访问密钥 AK/SK AK SK", token: "API Token 令牌",
     database: "数据库连接 数据库名", access_key: "Access Key", secret_key: "Secret Key",
@@ -55,7 +56,7 @@ export function mountPreviewHost(options: PreviewOptions = {}) {
   function matches(item: Item, query: string) {
     const text = [JSON.stringify(metadata(item)), labels[item.kind],
       ...Object.keys(item.values).map(k => labels[k] ?? k),
-      ...Object.values(item.values)].join(" ");
+      ...Object.entries(item.values).filter(([key]) => key !== "totp").map(([, value]) => value)].join(" ");
     return normalize(query).trim().split(/\s+/).every(t => normalize(text).includes(t));
   }
   function fail(code: string, message: string): never { throw { code, message }; }
@@ -79,10 +80,16 @@ export function mountPreviewHost(options: PreviewOptions = {}) {
           (answer ? answer.ids.includes(i.id) : matches(i, a.query ?? ""))).map(metadata);
       }
       case "get_secret_metadata": return metadata(find(a.secret_id));
+      case "ui_otp": {
+        const item = current(a);
+        if (item.deletedAt || !item.values.totp) fail("INVALID_INPUT", "没有可用的验证码");
+        return {code: "123456", expires: (Math.floor(Date.now() / 30000) + 1) * 30};
+      }
       case "ui_reveal": {
         const item = current(a);
         if (item.deletedAt) fail("TRASHED", "请先恢复条目。");
-        return { values: { ...item.values } };
+        const {totp, ...visible} = item.values;
+        return { values: totp ? {...visible, otp_code: "123456"} : visible };
       }
       case "ui_save": {
         if (conflict) fail("CONFLICT", "条目已发生变化，请重新打开编辑。");
@@ -91,11 +98,13 @@ export function mountPreviewHost(options: PreviewOptions = {}) {
         if (old && old.revision !== r.revision) fail("CONFLICT", "条目已发生变化，请重新打开编辑。");
         if (old?.deletedAt) fail("TRASHED", "请先恢复条目。");
         const values: Record<string, string> = Object.fromEntries(Object.entries(
-          r.values ?? (old && old.kind === r.kind ? old.values : {})
+          r.mergeWebsiteFields && old ? {...old.values, ...Object.fromEntries(Object.entries(r.values ?? {}).filter(([,v]) => v !== ""))} : r.values ?? (old && old.kind === r.kind ? old.values : {})
         ).filter(([, value]) => typeof value === "string" && value !== "")) as Record<string, string>;
         const required = r.kind === "aksk" ? ["access_key", "secret_key"] :
-          r.kind === "database" ? ["engine", "host"] : ["token"];
-        if (!r.name?.trim() || !["aksk", "token", "database"].includes(r.kind) ||
+          r.kind === "database" ? ["engine", "host"] : r.kind === "password" ? ["url"] : ["token"];
+        if (r.kind === "password" && (!values.url?.startsWith("https://") || !(values.password || values.totp)))
+          fail("INVALID_INPUT", "请填写 HTTPS 网址及密码或验证码设置密钥。");
+        if (!r.name?.trim() || !["aksk", "token", "database", "password"].includes(r.kind) ||
           required.some(k => !values[k]?.trim())) fail("INVALID_INPUT", "请填写必填字段。");
         if (r.kind === "database" && values.port && (!/^\d+$/.test(values.port) ||
           +values.port < 1 || +values.port > 65535)) fail("INVALID_INPUT", "端口必须为 1–65535。");

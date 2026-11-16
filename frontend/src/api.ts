@@ -8,13 +8,14 @@ export type Secret = {
   id: string;
   revision: string;
   name: string;
-  kind: "aksk" | "token" | "database";
+  kind: "aksk" | "token" | "database" | "password";
   provider: string;
   account: string;
   environment: string;
   tags: string[];
   notes: string;
   fields: string[];
+  passkeyCount?: number;
   updatedAt: string;
   deletedAt: string | null;
   expiresAt: string | null;

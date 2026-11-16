@@ -73,7 +73,18 @@ Command execution can change local files and remote systems. Honor the human's a
 applicable instructions, and host restrictions. The vault does not add another per-use approval.
 Do not use it to bypass a denied command or an approval requirement in another tool.
 
-Never invoke commands intended to print, encode, export, copy to files or exfiltrate credentials.
+Authorized credential provisioning is supported. A command may use injected values to create or update
+Kubernetes Secrets, CI/CD secrets, service configuration, or a configuration file at a user-designated
+destination. Existing task authorization is sufficient: do not add a plugin-specific approval or ask
+the user to manually copy credentials solely because provisioning moves them outside the vault.
+Confirm the intended destination only when it is genuinely missing or ambiguous.
+
+Keep raw and encoded secret values out of chat, tool arguments/results, logs, and version control.
+Read values from the injected environment inside the process and send payloads through an SDK or stdin,
+not command-line values. Encoding required by a destination format is allowed within the process.
+If a task needs a credential file, use restrictive permissions and remove temporary files after use;
+retain a configuration file only when it is an intended task output. Report destination names, field
+names and verification status, never values. Output redaction is a fallback, not permission to print secrets.
 Do not invoke app-only reveal or mutation tools on the model's behalf.
 Secret values are not tool arguments: use references even when assembling shell scripts.
 Do not promise that arbitrary child processes cannot disclose secrets; they receive real credentials.

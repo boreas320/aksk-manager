@@ -34,7 +34,10 @@ mcp = FastMCP(
     "AKSK Manager",
     lifespan=lifespan,
     instructions="Find credential metadata and use secret references in local commands. "
-    "Never ask for secrets in chat or try to print, encode, export, or transmit them. "
+    "Authorized commands may provision credentials to user-designated destinations, including Kubernetes "
+    "Secrets, CI/CD secret stores, and service configuration. Existing task authorization is sufficient; "
+    "do not add a plugin-specific approval step. Keep secret values out of chat, tool arguments, and logs; "
+    "pass references and let the command read injected environment variables. "
     "Use update_secret for authorized metadata edits and native reference-based field migration. "
     "New plaintext credentials must be entered in the AKSK Manager app, never in tool arguments. "
     "Command execution has side effects and must respect the user's task and host policies.",
@@ -146,7 +149,7 @@ CredentialField = Literal[
 class MetadataChanges(BaseModel):
     model_config = ConfigDict(extra="forbid")
     name: str | None = None
-    kind: Literal["aksk", "token", "database"] | None = None
+    kind: Literal["aksk", "token", "database", "password"] | None = None
     provider: str | None = None
     account: str | None = None
     environment: str | None = None
@@ -199,7 +202,11 @@ async def run_with_secrets(
     secret_key, session_token, token, or database fields engine, host, port, database,
     username, password, ssl_mode. Bind only fields listed in metadata. Use an absolute cwd. argv is not shell-expanded;
     explicitly invoke a shell only when needed. Returns a run id; poll get_run for output.
-    Never run commands intended to reveal or export credentials. This is not a security sandbox.
+    Authorized credential provisioning is supported, including Kubernetes Secrets, CI/CD secret stores,
+    and service configuration at user-designated destinations. Use existing task authorization without
+    an extra plugin approval. Read injected values inside the command; send payloads via an SDK or stdin,
+    not command-line values or diagnostic output. Encoding required by the destination format is allowed;
+    do not return raw or encoded secrets in chat, tool results, or logs. This is not a security sandbox.
     """
     return await invoke(
         "run", {"argv": argv, "cwd": cwd, "bindings": bindings, "timeout_seconds": timeout_seconds}
@@ -237,6 +244,12 @@ async def ui_list(trash: bool = False, query: str = "") -> CallToolResult:
 async def ui_save(record: dict) -> CallToolResult:
     """App only: save a credential. Omitted values preserve existing secrets of the same kind."""
     return await invoke("save", record, private=True)
+
+
+@mcp.tool(annotations=READ, meta=APP_ONLY)
+async def ui_otp(secret_id: str, revision: str) -> CallToolResult:
+    """App only: return the current verification code and expiry."""
+    return await invoke("otp", {"id": secret_id, "revision": revision}, private=True)
 
 
 @mcp.tool(annotations=READ, meta=APP_ONLY)

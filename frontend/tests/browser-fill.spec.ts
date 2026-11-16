@@ -1,0 +1,39 @@
+import { test, expect } from "@playwright/test";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+
+test("Chrome popup fills each step and rejects ambiguous and foreign form targets", async ({ page }) => {
+  const origin = "https://example.invalid";
+  await page.route(origin + "/**", route => route.fulfill({contentType: "text/html",
+    body: '<main></main><strong id="site"></strong><p id="status"></p><form><input autocomplete="username"></form>'}));
+  await page.goto(origin);
+  // Mock only the extension transport; run the shipped popup and injected DOM function in Chrome.
+  await page.evaluate(() => {
+    Object.assign(window, {chrome: {
+      tabs: {query: async () => [{id: 7, url: location.href}]},
+      scripting: {executeScript: async ({func, args = []}: any) => [{documentId: "demo", result: func(...args)}]},
+      runtime: {sendNativeMessage: async (_: string, req: any) => ({ok: true, data: req.action === "accounts"
+        ? [{id: "1", revision: "2", name: "Test", fields: ["username", "password", "otp_code"]}]
+        : {username: "demo", password: "test-only", otp_code: "123456"}[req.field as string]})}
+    }});
+  });
+  await page.addScriptTag({content: readFileSync(resolve("../browser/popup.js"), "utf8")});
+  for (const [html, label, value] of [
+    ['<input autocomplete="username">', "用户名", "demo"],
+    ['<input type="password">', "密码", "test-only"],
+    ['<input autocomplete="one-time-code">', "验证码", "123456"],
+  ]) {
+    await page.locator("form").evaluate((form, html) => form.innerHTML = html, html);
+    await page.getByRole("button", {name: label}).click();
+    await expect(page.locator("input")).toHaveValue(value);
+  }
+  await page.locator("form").evaluate(form => {form.innerHTML = '<input type="password"><input type="password">';});
+  await page.getByRole("button", {name: "密码"}).click();
+  await expect(page.locator("#status")).toContainText("未找到");
+  await page.locator("form").evaluate(form => {
+    form.innerHTML = '<input type="password">';
+    form.setAttribute("action", "https://other.invalid");
+  });
+  await page.getByRole("button", {name: "密码"}).click();
+  await expect(page.locator("input")).toHaveValue("");
+});

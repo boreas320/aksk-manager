@@ -15,7 +15,7 @@ def plugin_files(root: Path) -> list[Path]:
         ".gitignore",
         "THIRD_PARTY_NOTICES.md",
     ]
-    folders = [".codex-plugin", "src", "scripts", "assets", "skills", "native", "docs", "frontend", "tests"]
+    folders = [".codex-plugin", "src", "scripts", "assets", "skills", "native", "docs", "frontend", "browser", "tests"]
     if (root / "runtime/AKSKHelper.app/Contents/embedded.provisionprofile").is_file():
         subprocess.run(
             ["/usr/bin/codesign", "--verify", "--strict", str(root / "runtime/AKSKHelper.app")], check=True

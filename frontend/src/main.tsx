@@ -25,6 +25,9 @@ import "@openai/mcp-extensions/app/styles.css";
 import "./style.css";
 
 const fieldNames: Record<string, string> = {
+  url: "网站（HTTPS）",
+  totp: "验证码设置密钥或 otpauth 地址",
+  otp_code: "当前验证码",
   access_key: "Access Key",
   secret_key: "Secret Key",
   session_token: "Session Token",
@@ -37,7 +40,7 @@ const fieldNames: Record<string, string> = {
   password: "密码",
   ssl_mode: "TLS 模式",
 };
-const kindNames: Record<string, string> = { aksk: "云访问密钥", token: "API Token", database: "数据库连接" };
+const kindNames: Record<string, string> = { aksk: "云访问密钥", token: "API Token", database: "数据库连接", password: "网站账号" };
 const databaseFields = ["engine", "host", "port", "database", "username", "password", "ssl_mode"];
 const providers = [
   "AWS",
@@ -224,6 +227,10 @@ function Manager() {
         >
           <Database size={17} />数据库连接
         </button>
+        <button className={`nav-item ${!trash && kind === "password" ? "active" : ""}`}
+          onClick={() => { setTrash(false); setKind("password"); setSelected(null); }}>
+          <KeyRound size={17} />网站账号
+        </button>
         <div className="nav-divider" />
         <button
           className={`nav-item ${trash ? "active" : ""}`}
@@ -358,6 +365,7 @@ function Manager() {
                             .filter(Boolean)
                             .join(" · ") ||
                             kindNames[item.kind]}
+                          {!!item.passkeyCount && ` · ${item.passkeyCount} 个通行密钥`}
                         </small>
                       </div>
                     </div>
@@ -496,6 +504,28 @@ function Manager() {
   );
 }
 
+function LiveCode({item}: {item: Secret}) {
+  const [window, setWindow] = useState<{code: string; expires: number} | null>(null);
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    let live = true;
+    let timeout: ReturnType<typeof setTimeout>;
+    async function refresh() {
+      try {
+        const result = await call<{code: string; expires: number}>("ui_otp", {secret_id: item.id, revision: item.revision});
+        if (!live) return;
+        setWindow(result);
+        timeout = setTimeout(refresh, Math.max(200, result.expires * 1000 - Date.now()));
+      } catch { if (live) setWindow(null); }
+    }
+    void refresh();
+    const tick = setInterval(() => setNow(Date.now()), 500);
+    return () => { live = false; clearTimeout(timeout); clearInterval(tick); };
+  }, [item.id, item.revision]);
+  const remaining = window ? Math.ceil(window.expires - now / 1000) : 0;
+  return <code>{window && remaining > 0 ? `${window.code} · ${remaining}s` : "—"}</code>;
+}
+
 function Detail({
   item,
   close,
@@ -555,7 +585,7 @@ function Detail({
   async function copy(field: string) {
     try {
       const r =
-        values ??
+        (field === "otp_code" ? null : values) ??
         (
           await call<{ values: Record<string, string> }>("ui_reveal", {
             secret_id: item.id,
@@ -615,7 +645,7 @@ function Detail({
             <div className="secret-field" key={f}>
               <label>{fieldNames[f] ?? f}</label>
               <div>
-                <code>{values?.[f] ?? "••••••••••••••••"}</code>
+                {f === "otp_code" && values ? <LiveCode item={item} /> : <code>{values?.[f] ?? "••••••••••••••••"}</code>}
                 <button
                   className="icon-button"
                   aria-label={`复制 ${fieldNames[f] ?? f}`}
@@ -626,6 +656,9 @@ function Detail({
               </div>
             </div>
           ))}
+          {values && (
+            values.passkey_info && <p>通行密钥：{values.passkey_info}</p>
+          )}
           {values && (
             <small className="muted">显示内容将在 30 秒后自动隐藏。</small>
           )}
@@ -705,8 +738,9 @@ function Editor({
   const fields =
     form.kind === "aksk"
       ? ["access_key", "secret_key", "session_token"]
-      : form.kind === "database" ? databaseFields : ["token"];
-  const requiredFields = form.kind === "database" ? ["engine", "host"] : form.kind === "aksk" ? ["access_key", "secret_key"] : ["token"];
+      : form.kind === "database" ? databaseFields : form.kind === "password" ? ["url", "username", "password", "totp"] : ["token"];
+  const editWebsite = form.kind === "password" && item?.kind === "password";
+  const requiredFields = form.kind === "database" ? ["engine", "host"] : form.kind === "aksk" ? ["access_key", "secret_key"] : form.kind === "password" ? (editWebsite ? [] : ["url"]) : ["token"];
   const update = (key: string, value: string) =>
     setForm((old) => ({ ...old, [key]: value }));
   async function submit(e: React.FormEvent) {
@@ -731,6 +765,7 @@ function Editor({
             ),
           ],
           ...(replace ? { values } : {}),
+          ...(replace && editWebsite ? {mergeWebsiteFields: true} : {}),
         },
       });
       setValues({});
@@ -801,6 +836,10 @@ function Editor({
             <KeyRound size={18} />
             API Token
           </button>
+          <button type="button" className={form.kind === "password" ? "chosen" : ""}
+            onClick={() => { update("kind", "password"); setReplace(!item || item.kind !== "password"); setValues({}); }}>
+            <KeyRound size={18} />网站账号
+          </button>
           <button type="button" className={form.kind === "database" ? "chosen" : ""}
             onClick={() => { update("kind", "database"); setReplace(!item || item.kind !== "database"); setValues({}); }}>
             <Database size={18} />数据库连接
@@ -867,13 +906,14 @@ function Editor({
               {form.kind === "database" ? "更新连接配置" : "更新密钥内容"}
             </label>
           )}
+          {replace && editWebsite && <p className="muted">只填写要修改的字段。留空保留原值。</p>}
           {replace ? (
             fields.map((f) => (
               <label key={f}>
                 {fieldNames[f]}
                 {requiredFields.includes(f) ? "（必填）" : "（选填）"}
                 <input
-                  type={form.kind === "database" && f !== "password" ? "text" : "password"}
+                  type={f === "url" ? "url" : f === "username" || (form.kind === "database" && f !== "password") ? "text" : "password"}
                   inputMode={f === "port" ? "numeric" : undefined}
                   pattern={f === "port" ? "[0-9]+" : undefined}
                   placeholder={f === "engine" ? "例如 PostgreSQL、MySQL、Redis" : f === "port" ? "留空使用客户端默认端口" : undefined}

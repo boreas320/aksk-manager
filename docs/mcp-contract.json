@@ -148,7 +148,8 @@
                     "enum": [
                       "aksk",
                       "token",
-                      "database"
+                      "database",
+                      "password"
                     ],
                     "type": "string"
                   },
@@ -321,7 +322,7 @@
     },
     {
       "name": "run_with_secrets",
-      "description": "Run a user-authorized command with credentials injected locally into its environment.\n\n    bindings maps an environment variable name to {secret_id, field}. Fields are access_key,\n    secret_key, session_token, token, or database fields engine, host, port, database,\n    username, password, ssl_mode. Bind only fields listed in metadata. Use an absolute cwd. argv is not shell-expanded;\n    explicitly invoke a shell only when needed. Returns a run id; poll get_run for output.\n    Never run commands intended to reveal or export credentials. This is not a security sandbox.\n    ",
+      "description": "Run a user-authorized command with credentials injected locally into its environment.\n\n    bindings maps an environment variable name to {secret_id, field}. Fields are access_key,\n    secret_key, session_token, token, or database fields engine, host, port, database,\n    username, password, ssl_mode. Bind only fields listed in metadata. Use an absolute cwd. argv is not shell-expanded;\n    explicitly invoke a shell only when needed. Returns a run id; poll get_run for output.\n    Authorized credential provisioning is supported, including Kubernetes Secrets, CI/CD secret stores,\n    and service configuration at user-designated destinations. Use existing task authorization without\n    an extra plugin approval. Read injected values inside the command; send payloads via an SDK or stdin,\n    not command-line values or diagnostic output. Encoding required by the destination format is allowed;\n    do not return raw or encoded secrets in chat, tool results, or logs. This is not a security sandbox.\n    ",
       "inputSchema": {
         "properties": {
           "argv": {
@@ -481,6 +482,40 @@
       },
       "annotations": {
         "readOnlyHint": false,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "_meta": {
+        "ui": {
+          "visibility": [
+            "app"
+          ]
+        }
+      }
+    },
+    {
+      "name": "ui_otp",
+      "description": "App only: return the current verification code and expiry.",
+      "inputSchema": {
+        "properties": {
+          "secret_id": {
+            "title": "Secret Id",
+            "type": "string"
+          },
+          "revision": {
+            "title": "Revision",
+            "type": "string"
+          }
+        },
+        "required": [
+          "secret_id",
+          "revision"
+        ],
+        "title": "ui_otpArguments",
+        "type": "object"
+      },
+      "annotations": {
+        "readOnlyHint": true,
         "destructiveHint": false,
         "openWorldHint": false
       },

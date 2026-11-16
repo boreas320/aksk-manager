@@ -1,306 +1,5 @@
 import Darwin
 import Foundation
-import Security
-
-struct Failure: Error {
-  let code: String
-  let message: String
-  var json: [String: Any] { ["code": code, "message": message] }
-}
-func invalid(_ s: String = "输入无效，请检查字段。") -> Failure { Failure(code: "INVALID_INPUT", message: s) }
-func required(_ p: [String: Any], _ key: String) throws -> String {
-  guard let s = p[key] as? String, !s.isEmpty, !s.contains("\0") else { throw invalid() }
-  return s
-}
-func keychainFailure(_ s: OSStatus) -> Failure {
-  switch s {
-  case errSecItemNotFound: return Failure(code: "NOT_FOUND", message: "条目不存在，可能已在其他设备删除。")
-  case errSecMissingEntitlement:
-    return Failure(code: "MISSING_ENTITLEMENT", message: "本地组件缺少有效的钥匙串签名或配置描述文件。")
-  case errSecInteractionNotAllowed, errSecAuthFailed:
-    return Failure(code: "KEYCHAIN_LOCKED", message: "系统钥匙串不可访问，请解锁 Mac 并检查系统授权。")
-  case errSecUserCanceled: return Failure(code: "ACCESS_DENIED", message: "系统钥匙串访问未获授权。")
-  case errSecDuplicateItem: return Failure(code: "CONFLICT", message: "条目已存在，请刷新后重试。")
-  default: return Failure(code: "KEYCHAIN_ERROR", message: "钥匙串操作失败（系统状态 \(s)）。")
-  }
-}
-let encoder = JSONEncoder()
-let decoder = JSONDecoder()
-func now() -> String { ISO8601DateFormatter().string(from: Date()) }
-struct Record: Codable {
-  var id: String
-  var revision: String
-  var kind: String
-  var name: String
-  var provider: String
-  var account: String
-  var environment: String
-  var tags: [String]
-  var notes: String
-  var expiresAt: String?
-  var values: [String: String]
-  var updatedAt: String
-  var deletedAt: String?
-  func matches(_ query: String, includeValues: Bool) -> Bool {
-    func normalize(_ text: String) -> String {
-      text.folding(options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive],
-                   locale: Locale(identifier: "en_US_POSIX"))
-    }
-    let terms = normalize(query).split(whereSeparator: { $0.isWhitespace })
-    if terms.isEmpty { return true }
-    let kinds = ["aksk": "云访问密钥 AK/SK AK SK", "token": "API Token 令牌",
-                 "database": "数据库连接 database"]
-    let labels = ["access_key": "Access Key", "secret_key": "Secret Key",
-                  "session_token": "Session Token", "token": "API Token",
-                  "engine": "数据库类型", "host": "主机", "port": "端口",
-                  "database": "数据库名", "username": "用户名", "password": "密码",
-                  "ssl_mode": "TLS 模式 SSL"]
-    var text = [id, revision, kind, kinds[kind] ?? kind, name, provider, account,
-                environment, notes, updatedAt, deletedAt ?? "", expiresAt ?? ""] + tags
-    for field in values.keys { text += [field, labels[field] ?? field] }
-    // App-only matching stays in the helper; results still contain metadata only.
-    if includeValues { text.append(contentsOf: values.values) }
-    let haystack = normalize(text.joined(separator: " "))
-    return terms.allSatisfy { haystack.contains($0) }
-  }
-  var metadata: [String: Any] {
-    [
-      "id": id, "revision": revision, "kind": kind, "name": name, "provider": provider,
-      "account": account, "environment": environment, "tags": tags, "notes": notes,
-      "fields": values.keys.sorted(), "updatedAt": updatedAt,
-      "expiresAt": expiresAt as Any? ?? NSNull(), "deletedAt": deletedAt as Any? ?? NSNull(),
-    ]
-  }
-}
-protocol Storage {
-  func all() throws -> [Record]
-  func read(_ id: String) throws -> Record
-  func insert(_ r: Record) throws
-  func replace(_ r: Record) throws
-  func remove(_ id: String) throws
-}
-final class KeychainStorage: Storage {
-  let service = "com.boreas.aksk-manager.records.v1"
-  let accessGroup = Bundle.main.object(forInfoDictionaryKey: "AKSKAccessGroup") as? String
-  func query(_ id: String? = nil) throws -> [String: Any] {
-    guard let accessGroup, !accessGroup.contains("$("), !accessGroup.isEmpty else {
-      throw Failure(code: "MISSING_ENTITLEMENT", message: "请通过已签名的 AKSKHelper.app 启动本地组件。")
-    }
-    var q: [String: Any] = [
-      kSecClass as String: kSecClassGenericPassword,
-      kSecAttrService as String: service, kSecAttrAccessGroup as String: accessGroup,
-      kSecAttrSynchronizable as String: true, kSecUseDataProtectionKeychain as String: true,
-    ]
-    if let id { q[kSecAttrAccount as String] = id }
-    return q
-  }
-  func decode(_ data: Data) throws -> Record {
-    guard let r = try? decoder.decode(Record.self, from: data) else {
-      throw Failure(code: "INVALID_RECORD", message: "存在无法读取的条目，请检查版本兼容性。")
-    }
-    return r
-  }
-  func all() throws -> [Record] {
-    var q = try query()
-    q[kSecReturnData as String] = true
-    q[kSecMatchLimit as String] = kSecMatchLimitAll
-    var result: CFTypeRef?
-    let s = SecItemCopyMatching(q as CFDictionary, &result)
-    if s == errSecItemNotFound { return [] }
-    guard s == errSecSuccess else { throw keychainFailure(s) }
-    guard let items = result as? [Data] else { throw invalid() }
-    return try items.map(decode)
-  }
-  func read(_ id: String) throws -> Record {
-    var q = try query(id)
-    q[kSecReturnData as String] = true
-    q[kSecMatchLimit as String] = kSecMatchLimitOne
-    var result: CFTypeRef?
-    let s = SecItemCopyMatching(q as CFDictionary, &result)
-    guard s == errSecSuccess else { throw keychainFailure(s) }
-    guard let data = result as? Data else { throw invalid() }
-    return try decode(data)
-  }
-  func insert(_ r: Record) throws {
-    var q = try query(r.id)
-    q[kSecValueData as String] = try encoder.encode(r)
-    q[kSecAttrAccessible as String] = kSecAttrAccessibleWhenUnlocked
-    let s = SecItemAdd(q as CFDictionary, nil)
-    guard s == errSecSuccess else { throw keychainFailure(s) }
-  }
-  func replace(_ r: Record) throws {
-    let s = SecItemUpdate(
-      try query(r.id) as CFDictionary,
-      [kSecValueData as String: try encoder.encode(r)] as CFDictionary)
-    guard s == errSecSuccess else { throw keychainFailure(s) }
-  }
-  func remove(_ id: String) throws {
-    let s = SecItemDelete(try query(id) as CFDictionary)
-    guard s == errSecSuccess else { throw keychainFailure(s) }
-  }
-}
-#if TESTING
-  // Compiled only into a separate test executable, never the shipped application.
-  final class MemoryStorage: Storage {
-    var items: [String: Record] = [:]
-    func all() throws -> [Record] { Array(items.values) }
-    func read(_ id: String) throws -> Record {
-      guard let r = items[id] else { throw keychainFailure(errSecItemNotFound) }
-      return r
-    }
-    func insert(_ r: Record) throws {
-      guard items[r.id] == nil else { throw keychainFailure(errSecDuplicateItem) }
-      items[r.id] = r
-    }
-    func replace(_ r: Record) throws {
-      _ = try read(r.id)
-      items[r.id] = r
-    }
-    func remove(_ id: String) throws {
-      _ = try read(id)
-      items.removeValue(forKey: id)
-    }
-  }
-#endif
-// Coordinates local read/check/update across sessions, not a global iCloud CAS.
-func withStoreLock<T>(_ action: () throws -> T) throws -> T {
-  let dir = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(
-    "Library/Application Support/AKSK Manager")
-  try FileManager.default.createDirectory(
-    at: dir, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
-  let fd = open(
-    dir.appendingPathComponent("store.lock").path, O_CREAT | O_RDWR | O_NOFOLLOW | O_CLOEXEC, 0o600)
-  guard fd >= 0 else { throw Failure(code: "LOCAL_LOCK_ERROR", message: "无法取得本机存储锁。") }
-  defer { close(fd) }
-  guard flock(fd, LOCK_EX) == 0 else {
-    throw Failure(code: "LOCAL_LOCK_ERROR", message: "无法取得本机存储锁。")
-  }
-  defer { flock(fd, LOCK_UN) }
-  return try action()
-}
-// Agent updates resolve references under the same local lock as revision checks
-// and the final write. Plaintext never crosses the native boundary on this path.
-func update(_ p: [String: Any], store: Storage) throws -> Record {
-  guard Set(p.keys).isSubset(of: ["id", "revision", "changes", "field_refs", "remove_fields"]),
-    let changes = p["changes"] as? [String: Any],
-    Set(changes.keys).isSubset(of: ["name", "kind", "provider", "account", "environment", "tags", "notes"]),
-    let refs = p["field_refs"] as? [String: [String: Any]], refs.count <= 11,
-    let removed = p["remove_fields"] as? [String], removed.count <= 11,
-    Set(removed).isDisjoint(with: Set(refs.keys)),
-    !changes.isEmpty || !refs.isEmpty || !removed.isEmpty
-  else { throw invalid() }
-  let old = try store.read(required(p, "id"))
-  guard try required(p, "revision") == old.revision else {
-    throw Failure(code: "CONFLICT", message: "目标条目已变化，请重新读取元数据后核对。")
-  }
-  guard old.deletedAt == nil else { throw Failure(code: "TRASHED", message: "目标条目已在回收站。") }
-  let fields: Set<String> = ["access_key", "secret_key", "session_token", "token", "engine",
-                             "host", "port", "database", "username", "password", "ssl_mode"]
-  guard Set(refs.keys).isSubset(of: fields), Set(removed).isSubset(of: Set(old.values.keys))
-  else { throw invalid() }
-  var record = old.metadata
-  for (key, value) in changes { record[key] = value }
-  var values = record["kind"] as? String == old.kind ? old.values : [:]
-  for field in removed { values.removeValue(forKey: field) }
-  for (destination, ref) in refs {
-    guard Set(ref.keys).isSubset(of: ["secret_id", "revision", "field", "json_path"]),
-      let path = ref["json_path"] as? [String], path.count <= 16
-    else { throw invalid() }
-    let source = try store.read(required(ref, "secret_id"))
-    guard source.deletedAt == nil else {
-      throw Failure(code: "TRASHED", message: "引用来源已在回收站。")
-    }
-    guard try required(ref, "revision") == source.revision else {
-      throw Failure(code: "CONFLICT", message: "引用来源已变化，请重新读取元数据后核对。")
-    }
-    guard let raw = source.values[try required(ref, "field")] else {
-      throw invalid("引用字段不存在。")
-    }
-    var value = raw
-    if !path.isEmpty {
-      guard let data = raw.data(using: .utf8),
-        var selected = try? JSONSerialization.jsonObject(with: data)
-      else { throw invalid("引用字段不是有效的 JSON 对象。") }
-      for key in path {
-        guard let object = selected as? [String: Any], let next = object[key] else {
-          throw invalid("JSON 引用路径不存在或不是对象字段。")
-        }
-        selected = next
-      }
-      guard let text = selected as? String else { throw invalid("JSON 引用必须指向字符串。") }
-      value = text
-    }
-    values[destination] = value
-  }
-  record["values"] = values
-  return try save(record, store: store)
-}
-
-func save(_ p: [String: Any], store: Storage) throws -> Record {
-  for key in ["id", "revision", "provider", "account", "environment", "notes"] {
-    if let value = p[key], !(value is String) { throw invalid() }
-  }
-  if let value = p["tags"], !(value is [String]) { throw invalid() }
-  if let value = p["values"], !(value is [String: String]) { throw invalid() }
-  if let value = p["expiresAt"], !(value is NSNull), !(value is String) { throw invalid() }
-  let id = p["id"] as? String ?? ""
-  let old = id.isEmpty ? nil : try store.read(id)
-  if let old {
-    guard p["revision"] as? String == old.revision else {
-      throw Failure(code: "CONFLICT", message: "条目已发生变化，请重新打开编辑。")
-    }
-    guard old.deletedAt == nil else { throw Failure(code: "TRASHED", message: "请先恢复条目。") }
-  }
-  let name = try required(p, "name").trimmingCharacters(in: .whitespacesAndNewlines)
-  let kind = try required(p, "kind")
-  guard ["aksk", "token", "database"].contains(kind), !name.isEmpty, name.count <= 160 else { throw invalid() }
-  func text(_ key: String, limit: Int = 500) throws -> String {
-    let v = p[key] as? String ?? ""
-    guard !v.contains("\0"), v.count <= limit else { throw invalid() }
-    return v
-  }
-  let tags = p["tags"] as? [String] ?? []
-  guard tags.count <= 30, tags.allSatisfy({ $0.count <= 80 && !$0.contains("\0") }) else {
-    throw invalid()
-  }
-  var values = p["values"] as? [String: String]
-  if values == nil, old?.kind == kind { values = old?.values }
-  guard let values else { throw invalid("请填写密钥。") }
-  let allowed: Set<String>
-  let needed: [String]
-  switch kind {
-  case "aksk":
-    allowed = ["access_key", "secret_key", "session_token"]
-    needed = ["access_key", "secret_key"]
-  case "database":
-    allowed = ["engine", "host", "port", "database", "username", "password", "ssl_mode"]
-    needed = ["engine", "host"]
-  default:
-    allowed = ["token"]
-    needed = ["token"]
-  }
-  guard Set(values.keys).isSubset(of: allowed), needed.allSatisfy({ !(values[$0] ?? "").isEmpty }),
-    values.values.allSatisfy({ !$0.contains("\0") && $0.utf8.count <= 16384 })
-  else { throw invalid("请填写所选类型所需的密钥字段。") }
-  if kind == "database" {
-    guard needed.allSatisfy({ !(values[$0] ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty })
-    else { throw invalid("请填写数据库类型和主机。") }
-    if let port = values["port"], !port.isEmpty {
-      guard port.utf8.allSatisfy({ $0 >= 48 && $0 <= 57 }),
-        let number = Int(port), (1...65535).contains(number)
-      else { throw invalid("数据库端口必须是 1–65535 的整数。") }
-    }
-  }
-  let r = Record(
-    id: old?.id ?? UUID().uuidString, revision: UUID().uuidString, kind: kind, name: name,
-    provider: try text("provider"), account: try text("account"),
-    environment: try text("environment"), tags: tags,
-    notes: try text("notes", limit: 4000), expiresAt: p["expiresAt"] as? String,
-    values: values.filter({ !$0.value.isEmpty }), updatedAt: now(), deletedAt: nil)
-  guard try encoder.encode(r).count <= 65536 else { throw invalid("条目过大。") }
-  if old == nil { try store.insert(r) } else { try store.replace(r) }
-  return r
-}
 // Continuously drain bounded buffers. Publish only after completion to prevent cross-chunk leaks.
 final class Capture {
   let lock = NSLock()
@@ -510,13 +209,23 @@ final class Service {
     case "metadata": return try store.read(required(p, "id")).metadata
     case "save": return try withStoreLock { try save(p, store: store).metadata }
     case "update": return try withStoreLock { try update(p, store: store).metadata }
-    case "reveal":
+    case "reveal", "otp":
       let r = try store.read(required(p, "id"))
       guard r.deletedAt == nil else { throw Failure(code: "TRASHED", message: "请先恢复条目。") }
       guard p["revision"] as? String == r.revision else {
         throw Failure(code: "CONFLICT", message: "条目已变化，请刷新。")
       }
-      return ["values": r.values]
+      if method == "otp" {
+        guard r.kind == "password", let seed = r.values["totp"] else { throw invalid() }
+        let window = try codeWindow(seed)
+        return ["code": window.code, "expires": window.expires]
+      }
+      var visible = r.values.filter { r.accessibleFields.contains($0.key) }
+      if r.kind == "password", let seed = r.values["totp"] { visible["otp_code"] = try currentCode(seed) }
+      if let keys = r.passkeys, !keys.isEmpty {
+        visible["passkey_info"] = keys.map { "\($0.username) · \($0.rp)" }.joined(separator: "\n")
+      }
+      return ["values": visible]
     case "trash", "restore", "purge":
       return try withStoreLock {
         var r = try store.read(required(p, "id"))
@@ -568,7 +277,7 @@ final class Service {
         else { throw invalid() }
         let r = try store.read(id)
         guard r.deletedAt == nil else { throw Failure(code: "TRASHED", message: "所选密钥在回收站中。") }
-        guard let value = r.values[field], !value.isEmpty else {
+        guard r.bindable(field), let value = r.values[field], !value.isEmpty else {
           throw Failure(code: "FIELD_NOT_FOUND", message: "所选密钥字段不存在。")
         }
         env[key] = value
@@ -598,6 +307,30 @@ let store: Storage
   store = KeychainStorage()
 #endif
 let service = Service(store: store)
+if CommandLine.arguments.dropFirst().first == "--browser" {
+  let input = FileHandle.standardInput
+  func readExactly(_ length: Int) -> Data {
+    var result = Data()
+    while result.count < length {
+      let part = input.readData(ofLength: length - result.count)
+      if part.isEmpty { break }
+      result.append(part)
+    }
+    return result
+  }
+  let header = readExactly(4)
+  guard header.count == 4 else { exit(1) }
+  let length = Int(header.withUnsafeBytes { $0.loadUnaligned(as: UInt32.self) }.littleEndian)
+  guard (1...65536).contains(length) else { exit(1) }
+  var reply: [String: Any] = ["ok": false]
+  if let request = (try? JSONSerialization.jsonObject(with: readExactly(length))) as? [String: Any],
+    let data = try? browserRequest(request, store: store) { reply = ["ok": true, "data": data] }
+  guard let body = try? JSONSerialization.data(withJSONObject: reply), body.count < 1048576 else { exit(1) }
+  var size = UInt32(body.count).littleEndian
+  FileHandle.standardOutput.write(withUnsafeBytes(of: &size) { Data($0) })
+  FileHandle.standardOutput.write(body)
+  exit(0)
+}
 while let line = readLine(strippingNewline: true) {
   var id: Any = NSNull()
   var response: [String: Any]
