@@ -29,7 +29,9 @@ def plugin_files(root: Path) -> list[Path]:
             for p in (root / folder).rglob("*")
             if p.is_file()
             and not any(part in excluded for part in p.relative_to(root).parts)
-            and p.suffix not in {".pyc", ".png"}
+            and p.suffix != ".pyc"
+            and (p.suffix != ".png" or "Assets.xcassets" in p.relative_to(root).parts)
+            and p.relative_to(root).as_posix() != "frontend/preview/local-accounts.json"
             and p.name != ".DS_Store"
         )
     for path in paths:

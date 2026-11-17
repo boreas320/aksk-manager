@@ -45,7 +45,7 @@ final class Provider: ASCredentialProviderViewController {
           audit.notice("Passkey assertion signed; submitting to system")
           _ = await extensionContext.completeAssertionRequest(using: response)
         } else {
-          guard let origin = webOrigin(label), webOrigin(record.values["url"] ?? "") == origin else { throw invalid() }
+          guard let origin = webOrigin(label), record.websiteOrigins.contains(origin) else { throw invalid() }
           if request.credentialIdentity is ASOneTimeCodeCredentialIdentity, let seed = record.values["totp"] {
             _ = await extensionContext.completeOneTimeCodeRequest(using: ASOneTimeCodeCredential(code: try currentCode(seed)))
           } else if request.credentialIdentity is ASPasswordCredentialIdentity, let password = record.values["password"] {

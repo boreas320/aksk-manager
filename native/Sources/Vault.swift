@@ -65,7 +65,7 @@ func browserRequest(_ request: [String: Any], store: Storage) throws -> Any {
   let origin = try required(request, "origin")
   guard webOrigin(origin) == origin else { throw invalid() }
   func matches(_ record: Record) -> Bool {
-    record.kind == "password" && record.deletedAt == nil && webOrigin(record.values["url"] ?? "") == origin
+    record.kind == "password" && record.deletedAt == nil && record.websiteOrigins.contains(origin)
   }
   switch try required(request, "action") {
   case "accounts":
@@ -138,6 +138,9 @@ struct Record: Codable {
   var deletedAt: String?
   var importID: String?
   var passkeys: [StoredPasskey]?
+  var additionalURLs: [String]?
+  var websiteURLs: [String] { [values["url"]].compactMap { $0 } + (additionalURLs ?? []) }
+  var websiteOrigins: Set<String> { Set(websiteURLs.compactMap(webOrigin)) }
   var accessibleFields: [String] {
     kind == "password" ? values.keys.filter { ["username", "password", "url"].contains($0) } : Array(values.keys)
   }
@@ -164,6 +167,7 @@ struct Record: Codable {
     // App-only matching stays in the helper; results still contain metadata only.
     if includeValues {
       text.append(contentsOf: accessibleFields.compactMap { values[$0] })
+      text += additionalURLs ?? []
       for passkey in passkeys ?? [] { text += [passkey.username, passkey.rp] }
     }
     let haystack = normalize(text.joined(separator: " "))
@@ -423,7 +427,8 @@ func save(_ p: [String: Any], store: Storage) throws -> Record {
     environment: try text("environment"), tags: tags,
     notes: try text("notes", limit: 4000), expiresAt: p["expiresAt"] as? String,
     values: values.filter({ !$0.value.isEmpty }), updatedAt: now(), deletedAt: nil,
-    importID: kind == "password" ? old?.importID : nil, passkeys: kind == "password" ? old?.passkeys : nil)
+    importID: kind == "password" ? old?.importID : nil, passkeys: kind == "password" ? old?.passkeys : nil,
+    additionalURLs: kind == "password" ? old?.additionalURLs : nil)
   guard try encoder.encode(r).count <= 65536 else { throw invalid("条目过大。") }
   if old == nil { try store.insert(r) } else { try store.replace(r) }
   return r

@@ -205,7 +205,16 @@ final class Service {
       return try store.all().filter {
         ($0.deletedAt != nil) == trash
           && $0.matches(query, includeValues: method == "ui_list")
-      }.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }.map(\.metadata)
+      }.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }.map { r in
+        var metadata = r.metadata
+        if method == "ui_list", r.kind == "password", r.deletedAt == nil {
+          metadata["website"] = ["url": r.values["url"] ?? r.passkeys?.first?.rp ?? "",
+                                 "username": r.values["username"] ?? r.passkeys?.first?.username ?? ""]
+          metadata["websiteURLs"] = r.websiteURLs
+          metadata["passkeyInfo"] = (r.passkeys ?? []).map { "\($0.username) · \($0.rp)" }
+        }
+        return metadata
+      }
     case "metadata": return try store.read(required(p, "id")).metadata
     case "save": return try withStoreLock { try save(p, store: store).metadata }
     case "update": return try withStoreLock { try update(p, store: store).metadata }

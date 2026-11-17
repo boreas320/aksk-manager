@@ -14,3 +14,4 @@ runtime/
 src/aksk_manager/ui/index.html
 *.mobileprovision
 *.provisionprofile
+frontend/preview/local-accounts.json

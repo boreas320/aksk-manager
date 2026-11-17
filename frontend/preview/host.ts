@@ -3,6 +3,7 @@
  * Keep the implementation self-contained so Playwright can inject this function.
  */
 export type PreviewOptions = {
+  snapshot?: {name: string; account: string; updatedAt: string; passkeyCount: number; fields: string[]}[];
   html?: string;
   empty?: boolean;
   blocked?: boolean;
@@ -46,13 +47,13 @@ export function mountPreviewHost(options: PreviewOptions = {}) {
   testWindow.calls = [];
   testWindow.contextLeaks = [];
   testWindow.setPreviewDropReplies = (names) => { dropReplies = names; };
-  const metadata = ({ values, ...item }: Item) => ({ ...item, fields: Object.keys(values)
+  const metadata = ({ values, ...item }: Item) => ({ ...item, ...(item.kind === "password" ? {website: {url: values.url ?? "", username: values.username ?? ""}} : {}), fields: Object.keys(values)
     .map(key => key === "totp" ? "otp_code" : key).sort() });
   const normalize = (s: string) => s.normalize("NFKD").replace(/\p{M}/gu, "").toLowerCase();
   const labels: Record<string, string> = { aksk: "云访问密钥 AK/SK AK SK", token: "API Token 令牌",
     database: "数据库连接 数据库名", access_key: "Access Key", secret_key: "Secret Key",
     session_token: "Session Token", engine: "数据库类型", host: "主机", port: "端口",
-    username: "用户名", password: "密码", ssl_mode: "TLS 模式 SSL" };
+    otp_code: "动态验证码", username: "用户名", password: "密码", ssl_mode: "TLS 模式 SSL" };
   function matches(item: Item, query: string) {
     const text = [JSON.stringify(metadata(item)), labels[item.kind],
       ...Object.keys(item.values).map(k => labels[k] ?? k),
@@ -71,6 +72,16 @@ export function mountPreviewHost(options: PreviewOptions = {}) {
     return item;
   }
   function tool(name: string, a: Record<string, any>) {
+    if (options.snapshot) {
+      if (name === "ui_status") return {readOnlySnapshot: true};
+      if (name !== "ui_list") fail("READ_ONLY", "此预览仅显示本地测试账号摘要。");
+      const terms = normalize(a.query ?? "").trim().split(/\s+/);
+      return a.trash ? [] : options.snapshot.map((row, index) => ({
+        ...base, provider: "", environment: "", tags: [], notes: "", ...row,
+        id: "snapshot-" + index, revision: row.updatedAt, kind: "password",
+      })).filter(row => terms.every(t => normalize([row.name, row.account, "网站账号",
+        row.passkeyCount ? "passkey 通行密钥" : "", ...row.fields.map(f => labels[f] ?? f)].join(" ")).includes(t)));
+    }
     if (blocked) fail("SIGNING_REQUIRED", "本地组件缺少匹配的 Mac 配置描述文件，请重新签名构建。");
     switch (name) {
       case "ui_status": return { keychain: "available", remote_verified: false };
@@ -130,8 +141,8 @@ export function mountPreviewHost(options: PreviewOptions = {}) {
     }
   }
   const timers = new Set<ReturnType<typeof setTimeout>>();
-  function onMessage(e: MessageEvent) {
-    if (e.source !== frame.contentWindow || !e.data?.jsonrpc) return;
+  async function onMessage(e: MessageEvent) {
+    if (e.origin !== location.origin || e.source !== frame.contentWindow || !e.data?.jsonrpc) return;
     const m = e.data;
     if (["ui/update-model-context", "ui/message"].includes(m.method)) testWindow.contextLeaks.push(m.params);
     if (m.id === undefined) return;
@@ -151,7 +162,16 @@ export function mountPreviewHost(options: PreviewOptions = {}) {
       // Test instrumentation exists only in this mock host's memory.
       testWindow.calls.push({ name, args: a });
       let payload;
-      try { payload = { ok: true, data: tool(name, a) }; }
+      try {
+        let data;
+        if (options.snapshot && name === "ui_otp" && options.snapshot.some((row, index) =>
+          a.secret_id === "snapshot-" + index && row.fields.includes("otp_code") && a.revision === row.updatedAt)) {
+          const res = await fetch("/__preview/test-account/otp", {method: "POST", headers: {"X-AKSK-Preview": "otp"}, cache: "no-store"});
+          if (!res.ok) fail("UNAVAILABLE", "当前验证码不可用");
+          data = await res.json();
+        } else data = tool(name, a);
+        payload = { ok: true, data };
+      }
       catch (error) { payload = { ok: false, error }; }
       result = name.startsWith("ui_")
         ? { content: [{ type: "text", text: "界面操作完成。" }], _meta: { private: payload }, isError: !payload.ok }

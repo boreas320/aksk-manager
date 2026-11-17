@@ -1,20 +1,41 @@
 // Run via scripts/smoke-browser.py --extension with a disposable Keychain record.
 import { chromium } from "playwright";
-import { mkdtemp, mkdir, copyFile, rm } from "node:fs/promises";
+import { mkdtemp, mkdir, copyFile, rm, writeFile, readFile } from "node:fs/promises";
 import { tmpdir, homedir } from "node:os";
 import { join, resolve } from "node:path";
 import assert from "node:assert/strict";
-import { createHmac } from "node:crypto";
+import { createHash, randomUUID, createHmac } from "node:crypto";
 let input = "";
 for await (const chunk of process.stdin) input += chunk;
-const fixture = JSON.parse(input);
+const simulated = process.argv.includes("--fixture-host");
+const fixture = simulated ? {origin:"https://"+randomUUID().replaceAll("-","")+".example.invalid",password:randomUUID()} : JSON.parse(input);
 assert.match(fixture.origin, /^https:\/\/[0-9a-f]{32}\.example\.invalid$/);
 const profile = await mkdtemp(join(tmpdir(), "aksk-browser-smoke-"));
 let context;
 try {
   const host = "com.boreas.aksk_manager.json";
   await mkdir(join(profile, "NativeMessagingHosts"));
-  await copyFile(join(homedir(), "Library/Application Support/Google/Chrome/NativeMessagingHosts", host),
+  if (simulated) {
+    const key=JSON.parse(await readFile(resolve("../browser/manifest.json"),"utf8")).key;
+    const id=createHash("sha256").update(Buffer.from(key,"base64")).digest("hex").slice(0,32)
+      .replace(/./g,c=>String.fromCharCode(97+parseInt(c,16)));
+    const binary=join(profile,"test-host");
+    await writeFile(binary, `#!/usr/bin/python3
+import sys,json,struct,time,hmac,hashlib
+buf=sys.stdin.buffer
+n=struct.unpack("<I",buf.read(4))[0]
+q=json.loads(buf.read(n))
+d=hmac.new(bytes.fromhex("48656c6c6f21deadbeef"),struct.pack(">Q",int(time.time())//30),hashlib.sha1).digest()
+i=d[-1]&15
+otp=str((int.from_bytes(d[i:i+4],"big")&2147483647)%1000000).zfill(6)
+items=[dict(name="AKSK browser smoke",fields=["username","password","otp_code"],id="one",revision="1"),dict(name="AKSK alternate smoke",fields=["username","password"],id="two",revision="1")]
+ok=q.get("origin")==${JSON.stringify(fixture.origin)}
+value=items if q["action"]=="accounts" else dict(username="demo",password=${JSON.stringify(fixture.password)},otp_code=otp).get(q.get("field")) if q.get("id")=="one" else None
+out=json.dumps(dict(ok=ok,data=value if ok else None)).encode()
+sys.stdout.buffer.write(struct.pack("<I",len(out))+out)
+`,{mode:0o700});
+    await writeFile(join(profile,"NativeMessagingHosts",host),JSON.stringify({name:"com.boreas.aksk_manager",description:"test fixture",path:binary,type:"stdio",allowed_origins:["chrome-extension://"+id+"/"]}));
+  } else await copyFile(join(homedir(), "Library/Application Support/Google/Chrome/NativeMessagingHosts", host),
                  join(profile, "NativeMessagingHosts", host));
   context = await chromium.launchPersistentContext(profile, {
     channel: process.env.PLAYWRIGHT_CHANNEL || "chromium", headless: false, args: ["--enable-unsafe-extension-debugging"],
@@ -80,7 +101,7 @@ try {
     await client.send("Target.closeTarget", {targetId:target.targetId});
   }
   for (const [label, html] of [["用户名",'<input autocomplete="username">'], ["密码",'<input type="password">'],
-                             ["验证码",'<input autocomplete="one-time-code">']]) {
+                             ["验证码",'<input autocomplete="one-time-code">'], ["验证码",'<input placeholder="MFA Code" autocomplete="on">']]) {
     await page.locator("form").evaluate((form,html)=>{form.innerHTML=html;},html);
     await clickField(label);
     const value=await page.locator("input").inputValue();
@@ -94,7 +115,42 @@ try {
     assert.ok(label==="验证码" ? [code(-1),code(0)].includes(value) : value===(label==="密码" ? fixture.password : "demo"),
               "unexpected filled value");
   }
-  console.log("PASS: installed action popup → signed native host → three fields on one HTTPS test tab");
+  // No popup or activeTab gesture: an actual page click starts the fill.
+  await page.reload();
+  const dom = await context.newCDPSession(page);
+  await page.locator("form").evaluate(f=>f.innerHTML='<label for="el-id-123-3">ID</label><input id="el-id-123-3" autocomplete="on" placeholder="SHAREid"><input type="password" id="loginBox">');
+  await page.locator("#el-id-123-3").click();
+  async function chooseAccount(beforeSelect) {
+  let node;
+  for(let i=0;i<50 && !node;i++){
+    node=(await dom.send("Accessibility.getFullAXTree")).nodes.find(n =>
+      n.role?.value==="button" && n.name?.value==="AKSK browser smoke");
+    if(!node) await new Promise(r=>setTimeout(r,100));
+  }
+  assert.ok(node,"matching account chooser did not appear");
+  const {model}=await dom.send("DOM.getBoxModel",{backendNodeId:node.backendDOMNodeId});
+  await beforeSelect();
+  await page.mouse.click((model.content[0]+model.content[4])/2,(model.content[1]+model.content[5])/2);
+  }
+  await chooseAccount(async()=>assert.equal(await page.locator("#el-id-123-3").inputValue(),""));
+  await page.waitForFunction(()=>document.querySelector("input").value==="demo");
+  // Reopen after choosing an account, with a different username already present.
+  const username = page.locator("#el-id-123-3");
+  await username.fill("existing-user");
+  await username.click();
+  await chooseAccount(async()=>assert.equal(await username.inputValue(),"existing-user"));
+  await page.waitForFunction(()=>document.querySelector("input").value==="demo");
+  const pw = page.locator("#loginBox");
+  await pw.fill("already-filled");
+  await pw.click();
+  await chooseAccount(async()=>assert.equal(await pw.inputValue(),"already-filled"));
+  await page.waitForFunction(expected=>document.querySelector("#loginBox").value===expected,fixture.password);
+  await page.locator("form").evaluate(f=>f.innerHTML='<input id="el-id-8265-6" autocomplete="on" placeholder="MFA Code" value="12">');
+  await page.locator("input").click();
+  await chooseAccount(async()=>assert.equal(await page.locator("input").inputValue(),"12"));
+  await page.waitForFunction(()=>/^\d{6}$/.test(document.querySelector("input").value));
+  console.log("PASS: page clicks → multi-account selection → username, password and OTP");
+  console.log("PASS: installed popup and page-click flows; host:", simulated ? "fixture" : "signed Keychain helper");
 } finally {
   try { await context?.close(); } finally { await rm(profile,{recursive:true,force:true}); }
 }

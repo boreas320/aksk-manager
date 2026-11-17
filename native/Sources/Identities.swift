@@ -12,7 +12,7 @@ func refreshIdentities() async throws {
       identities.append(ASPasskeyCredentialIdentity(relyingPartyIdentifier: key.rp, userName: key.username,
         credentialID: key.credentialID, userHandle: key.handle, recordIdentifier: record.id))
     }
-    if let origin = webOrigin(record.values["url"] ?? "") {
+    for origin in record.websiteOrigins.sorted() {
       let service = ASCredentialServiceIdentifier(identifier: origin, type: .URL)
       let username = record.values["username"] ?? record.name
       if record.values["password"] != nil {

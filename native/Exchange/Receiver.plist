@@ -8,6 +8,9 @@
 	<string>en</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
+
+	<key>CFBundleIconFile</key>
+	<string>AKSK.icns</string>
 	<key>CFBundleIdentifier</key>
 	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
 	<key>CFBundleInfoDictionaryVersion</key>
@@ -19,7 +22,7 @@
 	<key>CFBundleShortVersionString</key>
 	<string>0.1.0</string>
 	<key>CFBundleVersion</key>
-	<string>1</string>
+	<string>6</string>
 	<key>LSMinimumSystemVersion</key>
 	<string>26.0</string>
 	<key>NSUserActivityTypes</key><array><string>ASCredentialExchangeActivity</string><string>ASCredentialExchangeActivityType</string></array>

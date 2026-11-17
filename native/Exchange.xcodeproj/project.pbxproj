@@ -1,5 +1,12 @@
 // !$*UTF8*$!
 {archiveVersion = 1; classes = {}; objectVersion = 56; objects = {
+CCCCCCCCCCCCCCCCCCCCCC01 = {isa = PBXFileReference; path = "Exchange/AppIcon.icon"; lastKnownFileType = folder.iconcomposer.icon; sourceTree = "<group>";};
+CCCCCCCCCCCCCCCCCCCCCC02 = {isa = PBXBuildFile; fileRef = CCCCCCCCCCCCCCCCCCCCCC01;};
+CCCCCCCCCCCCCCCCCCCCCC03 = {isa = PBXBuildFile; fileRef = CCCCCCCCCCCCCCCCCCCCCC01;};
+CCCCCCCCCCCCCCCCCCCCCC04 = {isa = PBXResourcesBuildPhase; files = (CCCCCCCCCCCCCCCCCCCCCC03);};
+BBBBBBBBBBBBBBBBBBBBBB01 = {isa = PBXFileReference; path = "Exchange/AKSK.icns"; lastKnownFileType = image.icns; sourceTree = "<group>";};
+BBBBBBBBBBBBBBBBBBBBBB02 = {isa = PBXBuildFile; fileRef = BBBBBBBBBBBBBBBBBBBBBB01;};
+BBBBBBBBBBBBBBBBBBBBBB03 = {isa = PBXResourcesBuildPhase; files = (BBBBBBBBBBBBBBBBBBBBBB02);};
 AAAAAAAAAAAAAAAAAAAAAAA1 = {isa = PBXFileReference; path = "Sources/Vault.swift"; lastKnownFileType = sourcecode.swift; sourceTree = "<group>";};
 AAAAAAAAAAAAAAAAAAAAAAA2 = {isa = PBXFileReference; path = "Sources/Identities.swift"; lastKnownFileType = sourcecode.swift; sourceTree = "<group>";};
 AAAAAAAAAAAAAAAAAAAAAAA3 = {isa = PBXFileReference; path = "Exchange/Receiver.swift"; lastKnownFileType = sourcecode.swift; sourceTree = "<group>";};
@@ -10,9 +17,9 @@ AAAAAAAAAAAAAAAAAAAAAAA8 = {isa = PBXBuildFile; fileRef = AAAAAAAAAAAAAAAAAAAAAA
 AAAAAAAAAAAAAAAAAAAAAAA9 = {isa = PBXBuildFile; fileRef = AAAAAAAAAAAAAAAAAAAAAAA4;};
 AAAAAAAAAAAAAAAAAAAAAA20 = {isa = PBXBuildFile; fileRef = AAAAAAAAAAAAAAAAAAAAAAA2;};
 AAAAAAAAAAAAAAAAAAAAAAAA = {isa = PBXSourcesBuildPhase; files = (AAAAAAAAAAAAAAAAAAAAAAA8,AAAAAAAAAAAAAAAAAAAAAAA9,AAAAAAAAAAAAAAAAAAAAAA20);};
-AAAAAAAAAAAAAAAAAAAAAAAB = {isa = XCBuildConfiguration; name = Release; buildSettings = {PRODUCT_NAME = "$(TARGET_NAME)"; PRODUCT_BUNDLE_IDENTIFIER = "com.boreas.aksk-manager.exchange.provider"; CODE_SIGN_ENTITLEMENTS = Exchange/Provider.entitlements; INFOPLIST_FILE = Exchange/Provider.plist; SKIP_INSTALL = YES; APPLICATION_EXTENSION_API_ONLY = YES;};};
+AAAAAAAAAAAAAAAAAAAAAAAB = {isa = XCBuildConfiguration; name = Release; buildSettings = {PRODUCT_NAME = "$(TARGET_NAME)"; PRODUCT_BUNDLE_IDENTIFIER = "com.boreas.aksk-manager.exchange.provider"; ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon; CODE_SIGN_ENTITLEMENTS = Exchange/Provider.entitlements; INFOPLIST_FILE = Exchange/Provider.plist; SKIP_INSTALL = YES; APPLICATION_EXTENSION_API_ONLY = YES;};};
 AAAAAAAAAAAAAAAAAAAAAAAC = {isa = XCConfigurationList; buildConfigurations = (AAAAAAAAAAAAAAAAAAAAAAAB); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release;};
-AAAAAAAAAAAAAAAAAAAAAAAD = {isa = PBXNativeTarget; name = "AKSKProvider"; productName = "AKSKProvider"; productReference = AAAAAAAAAAAAAAAAAAAAAAA6; productType = "com.apple.product-type.app-extension"; buildPhases = (AAAAAAAAAAAAAAAAAAAAAAAA); dependencies = (); buildRules = (); buildConfigurationList = AAAAAAAAAAAAAAAAAAAAAAAC;};
+AAAAAAAAAAAAAAAAAAAAAAAD = {isa = PBXNativeTarget; name = "AKSKProvider"; productName = "AKSKProvider"; productReference = AAAAAAAAAAAAAAAAAAAAAAA6; productType = "com.apple.product-type.app-extension"; buildPhases = (CCCCCCCCCCCCCCCCCCCCCC04,AAAAAAAAAAAAAAAAAAAAAAAA); dependencies = (); buildRules = (); buildConfigurationList = AAAAAAAAAAAAAAAAAAAAAAAC;};
 AAAAAAAAAAAAAAAAAAAAAAAE = {isa = PBXContainerItemProxy; containerPortal = AAAAAAAAAAAAAAAAAAAAAAA7; proxyType = 1; remoteGlobalIDString = AAAAAAAAAAAAAAAAAAAAAAAD; remoteInfo = AKSKProvider;};
 AAAAAAAAAAAAAAAAAAAAAAAF = {isa = PBXTargetDependency; target = AAAAAAAAAAAAAAAAAAAAAAAD; targetProxy = AAAAAAAAAAAAAAAAAAAAAAAE;};
 AAAAAAAAAAAAAAAAAAAAAA10 = {isa = PBXBuildFile; fileRef = AAAAAAAAAAAAAAAAAAAAAAA6;};
@@ -21,11 +28,11 @@ AAAAAAAAAAAAAAAAAAAAAA12 = {isa = PBXBuildFile; fileRef = AAAAAAAAAAAAAAAAAAAAAA
 AAAAAAAAAAAAAAAAAAAAAA13 = {isa = PBXBuildFile; fileRef = AAAAAAAAAAAAAAAAAAAAAAA2;};
 AAAAAAAAAAAAAAAAAAAAAA14 = {isa = PBXBuildFile; fileRef = AAAAAAAAAAAAAAAAAAAAAAA3;};
 AAAAAAAAAAAAAAAAAAAAAA15 = {isa = PBXSourcesBuildPhase; files = (AAAAAAAAAAAAAAAAAAAAAA12,AAAAAAAAAAAAAAAAAAAAAA13,AAAAAAAAAAAAAAAAAAAAAA14);};
-AAAAAAAAAAAAAAAAAAAAAA16 = {isa = XCBuildConfiguration; name = Release; buildSettings = {PRODUCT_NAME = "$(TARGET_NAME)"; PRODUCT_BUNDLE_IDENTIFIER = "com.boreas.aksk-manager.exchange"; CODE_SIGN_ENTITLEMENTS = Exchange/Receiver.entitlements; INFOPLIST_FILE = Exchange/Receiver.plist; };};
+AAAAAAAAAAAAAAAAAAAAAA16 = {isa = XCBuildConfiguration; name = Release; buildSettings = {PRODUCT_NAME = "$(TARGET_NAME)"; PRODUCT_BUNDLE_IDENTIFIER = "com.boreas.aksk-manager"; CODE_SIGN_ENTITLEMENTS = Exchange/Receiver.entitlements; INFOPLIST_FILE = Exchange/Receiver.plist; };};
 AAAAAAAAAAAAAAAAAAAAAA17 = {isa = XCConfigurationList; buildConfigurations = (AAAAAAAAAAAAAAAAAAAAAA16); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release;};
-AAAAAAAAAAAAAAAAAAAAAA18 = {isa = PBXNativeTarget; name = "AKSK Manager"; productName = "AKSK Manager"; productReference = AAAAAAAAAAAAAAAAAAAAAAA5; productType = "com.apple.product-type.application"; buildPhases = (AAAAAAAAAAAAAAAAAAAAAA15,AAAAAAAAAAAAAAAAAAAAAA11); dependencies = (AAAAAAAAAAAAAAAAAAAAAAAF); buildRules = (); buildConfigurationList = AAAAAAAAAAAAAAAAAAAAAA17;};
+AAAAAAAAAAAAAAAAAAAAAA18 = {isa = PBXNativeTarget; name = "AKSK Manager"; productName = "AKSK Manager"; productReference = AAAAAAAAAAAAAAAAAAAAAAA5; productType = "com.apple.product-type.application"; buildPhases = (BBBBBBBBBBBBBBBBBBBBBB03,AAAAAAAAAAAAAAAAAAAAAA15,AAAAAAAAAAAAAAAAAAAAAA11); dependencies = (AAAAAAAAAAAAAAAAAAAAAAAF); buildRules = (); buildConfigurationList = AAAAAAAAAAAAAAAAAAAAAA17;};
 AAAAAAAAAAAAAAAAAAAAAA19 = {isa = PBXGroup; name = Products; children = (AAAAAAAAAAAAAAAAAAAAAAA5,AAAAAAAAAAAAAAAAAAAAAAA6); sourceTree = "<group>";};
-AAAAAAAAAAAAAAAAAAAAAA1A = {isa = PBXGroup; children = (AAAAAAAAAAAAAAAAAAAAAAA1,AAAAAAAAAAAAAAAAAAAAAAA2,AAAAAAAAAAAAAAAAAAAAAAA3,AAAAAAAAAAAAAAAAAAAAAAA4,AAAAAAAAAAAAAAAAAAAAAA19); sourceTree = "<group>";};
+AAAAAAAAAAAAAAAAAAAAAA1A = {isa = PBXGroup; children = (CCCCCCCCCCCCCCCCCCCCCC01,BBBBBBBBBBBBBBBBBBBBBB01,AAAAAAAAAAAAAAAAAAAAAAA1,AAAAAAAAAAAAAAAAAAAAAAA2,AAAAAAAAAAAAAAAAAAAAAAA3,AAAAAAAAAAAAAAAAAAAAAAA4,AAAAAAAAAAAAAAAAAAAAAA19); sourceTree = "<group>";};
 AAAAAAAAAAAAAAAAAAAAAA1B = {isa = XCBuildConfiguration; name = Release; buildSettings = {SDKROOT = macosx; MACOSX_DEPLOYMENT_TARGET = 26.0; SWIFT_VERSION = 5.0; CODE_SIGN_STYLE = Automatic; CODE_SIGN_IDENTITY = "Apple Development"; ENABLE_HARDENED_RUNTIME = YES;};};
 AAAAAAAAAAAAAAAAAAAAAA1C = {isa = XCConfigurationList; buildConfigurations = (AAAAAAAAAAAAAAAAAAAAAA1B); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release;};
 AAAAAAAAAAAAAAAAAAAAAAA7 = {isa = PBXProject; attributes = {LastUpgradeCheck = 2700;}; buildConfigurationList = AAAAAAAAAAAAAAAAAAAAAA1C; compatibilityVersion = "Xcode 14.0"; developmentRegion = en; knownRegions = (en,Base); mainGroup = AAAAAAAAAAAAAAAAAAAAAA1A; productRefGroup = AAAAAAAAAAAAAAAAAAAAAA19; projectDirPath = ""; projectRoot = ""; targets = (AAAAAAAAAAAAAAAAAAAAAA18,AAAAAAAAAAAAAAAAAAAAAAAD);};

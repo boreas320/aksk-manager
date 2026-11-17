@@ -40,3 +40,11 @@
 3. 在 Apple「密码」中对测试账号执行「将所选项目导出至 App」，选择 AKSK Manager。核对条目、多个 Passkey 和重复导入计数。当前签名实现限于 P-256/ES256；没有实现新建 Passkey。
 4. 钥匙串可用时运行 `PLAYWRIGHT_CHANNEL=chrome uv run python scripts/smoke-browser.py --extension` 在已安装的 Google Chrome 复验弹窗填充（先在 frontend 目录执行 npm ci）。去掉 `--extension` 可单独测试签名 helper 的消息协议。之后在 HTTPS 测试站用 Apple「密码」和 AKSK Manager 分别执行 Passkey 登录，核对系统选择的提供方、服务端是否接受签名及登录后的会话。
 5. 在 Codex 内置标签页重复测试；记录是否出现选择器、选择的提供方、服务端结果。在该标签页标注登录后才可见的元素，确认 Codex 收到并定位，再用阿里云 OSS 验证。每一步应保留版本和结果，不记录私钥、设置密钥、验证码或会话值。
+
+扩展 0.3.3 支持点击 HTTPS 顶层页面的用户名、密码和动态验证码输入框。只要有匹配账号就先显示选择框，包括仅匹配一个账号和输入框已有值的情况；选中前保留原值。旧版弹窗测试结果不代表此路径。独立 Chromium 配置加载了真实扩展，以临时 Native Messaging 测试宿主验证用户名、密码、验证码点击流程；实际钥匙串的本轮测试在创建测试账号时被系统拒绝，未进入页面填充。日常 Chrome 与 Codex 内置浏览器均需重新加载扩展、刷新目标页后分别验收。
+
+### macOS「密码」导出目标图标（2026-11-17，通过）
+
+在 macOS 27.3（26C5035r）安装签名 build 6 后，重新进入「密码 → 文件 → 将所选项目导出至 App → 选择目标」。列表只有一个 AKSK Manager，左侧实际显示绿色锁。验证停在目标列表，没有导出凭据。本次只验收图标。
+
+主 App 使用 `com.boreas.aksk-manager`，主图标资源为 `AKSK.icns`。原凭据扩展标识 `com.boreas.aksk-manager.exchange.provider` 和共享钥匙串访问组未变。旧主 App 标识在同机同尺寸查询中仍返回占位图；后续版本应保持新主 App 标识稳定。

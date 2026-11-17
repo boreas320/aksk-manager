@@ -16,6 +16,9 @@ export type Secret = {
   notes: string;
   fields: string[];
   passkeyCount?: number;
+  website?: {url: string; username: string};
+  websiteURLs?: string[];
+  passkeyInfo?: string[];
   updatedAt: string;
   deletedAt: string | null;
   expiresAt: string | null;

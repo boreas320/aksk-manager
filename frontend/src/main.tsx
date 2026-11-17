@@ -60,6 +60,7 @@ const date = (s: string) =>
   });
 
 function Manager() {
+  const [snapshot, setSnapshot] = useState(false);
   const [ready, setReady] = useState(false),
     [checking, setChecking] = useState(true),
     [available, setAvailable] = useState(false);
@@ -85,12 +86,13 @@ function Manager() {
     setChecking(true);
     setError("");
     try {
-      await call("ui_status");
+      const status = await call<{readOnlySnapshot?: boolean}>("ui_status");
       const result = await call<Secret[]>("ui_list", { trash: targetTrash });
       const matches = query.trim()
         ? await call<Secret[]>("ui_list", { trash: targetTrash, query })
         : null;
       if (id !== generation.current) return;
+      setSnapshot(status?.readOnlySnapshot === true);
       setAvailable(true);
       setUnconfirmed(false);
       setItems(result);
@@ -266,7 +268,7 @@ function Manager() {
                 : "集中管理凭据，让 Codex 按需使用。"}
             </p>
           </div>
-          {!trash && (
+          {!trash && !snapshot && (
             <button
               className="primary"
               disabled={!available || checking || unconfirmed}
@@ -285,10 +287,10 @@ function Manager() {
               : unconfirmed
                 ? "操作结果待核对，请刷新"
               : available
-                ? "本机钥匙串可访问"
+                ? (snapshot ? "本机测试账号 · 只读快照" : "本机钥匙串可访问")
                 : items.length ? "连接未确认，显示上次读取的记录" : "等待本地组件就绪"}
           </span>
-          <span className="status-detail">同步由 iCloud 钥匙串管理</span>
+          {!snapshot && <span className="status-detail">同步由 iCloud 钥匙串管理</span>}
           <button
             className="icon-button"
             aria-label="刷新"
@@ -404,7 +406,7 @@ function Manager() {
                         ? "移入回收站的条目会出现在这里。"
                         : "添加云访问密钥或 API Token，无需设置额外密码。"}
                 </p>
-                {available && !trash && !items.length && (
+                {available && !snapshot && !trash && !items.length && (
                   <button className="primary" disabled={checking || unconfirmed} onClick={() => setEditing("new")}>
                     <Plus size={16} />
                     添加密钥
@@ -431,7 +433,8 @@ function Manager() {
               }
               notify={setNotice}
               error={setError}
-              busy={working || !available || checking || unconfirmed}
+              snapshot={snapshot}
+              busy={snapshot || working || !available || checking || unconfirmed}
             />
           )}
         </div>
@@ -533,7 +536,7 @@ function Detail({
   change,
   notify,
   error,
-  busy,
+  busy, snapshot,
 }: {
   item: Secret;
   close: () => void;
@@ -541,10 +544,14 @@ function Detail({
   change: (a: "trash" | "restore" | "purge") => void;
   notify: (s: string) => void;
   error: (s: string) => void;
-  busy: boolean;
+  busy: boolean; snapshot: boolean;
 }) {
   const [values, setValues] = useState<Record<string, string> | null>(null),
     [revealing, setRevealing] = useState(false);
+  const website = item.kind === "password";
+  const urls = item.websiteURLs?.length ? item.websiteURLs : [item.website?.url || "—"];
+  const fields = website ? ["url", "username", "password", "otp_code"].filter(f =>
+    item.fields.includes(f) || ((f === "url" || f === "username") && item.website?.[f])) : item.fields;
   const mounted = useRef(true);
   useEffect(() => {
     mounted.current = true;
@@ -584,6 +591,13 @@ function Detail({
   }
   async function copy(field: string) {
     try {
+      if (website && (field === "url" || field === "username" || field === "otp_code")) {
+        const value = field === "otp_code" ? (await call<{code: string}>("ui_otp", {secret_id: item.id, revision: item.revision})).code : field === "url" ? urls.join("\n") : item.website?.[field];
+        if (!value) throw new Error();
+        await navigator.clipboard.writeText(value);
+        notify("已复制到系统剪贴板。");
+        return;
+      }
       const r =
         (field === "otp_code" ? null : values) ??
         (
@@ -636,18 +650,20 @@ function Detail({
         <section className="credentials">
           <div className="section-heading">
             <strong>凭据</strong>
-            <button onClick={reveal} disabled={revealing}>
+            {(!website || item.fields.includes("password")) && <button onClick={reveal} disabled={revealing || snapshot}>
               {values ? <EyeOff size={14} /> : <Eye size={14} />}{" "}
-              {values ? "隐藏" : "显示"}
-            </button>
+              {website ? (values ? "隐藏密码" : "显示密码") : (values ? "隐藏" : "显示")}
+            </button>}
           </div>
-          {item.fields.map((f) => (
+
+          {fields.map((f) => (
             <div className="secret-field" key={f}>
               <label>{fieldNames[f] ?? f}</label>
               <div>
-                {f === "otp_code" && values ? <LiveCode item={item} /> : <code>{values?.[f] ?? "••••••••••••••••"}</code>}
+                {f === "otp_code" && website ? <LiveCode item={item} /> : <code>{website && f === "url" ? urls.map((url, index) => <span key={index} style={{display: "block"}}>{url}</span>) : website && f === "username" ? item.website?.username || "—" : values?.[f] ?? "••••••••••••••••"}</code>}
                 <button
                   className="icon-button"
+                  disabled={snapshot}
                   aria-label={`复制 ${fieldNames[f] ?? f}`}
                   onClick={() => copy(f)}
                 >
@@ -656,9 +672,7 @@ function Detail({
               </div>
             </div>
           ))}
-          {values && (
-            values.passkey_info && <p>通行密钥：{values.passkey_info}</p>
-          )}
+          {item.passkeyInfo?.map((info, i) => <p key={i}>通行密钥：{info}</p>)}
           {values && (
             <small className="muted">显示内容将在 30 秒后自动隐藏。</small>
           )}

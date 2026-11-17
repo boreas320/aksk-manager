@@ -12,6 +12,7 @@ async function start() {
     target: {tabId: tab.id, frameIds: [0]}, func: () => location.origin,
   });
   if (page.result !== site.origin || !page.documentId) throw new Error();
+  await chrome.scripting.executeScript({target:{tabId:tab.id, documentIds:[page.documentId]}, files:["fields.js"]});
   const accounts = await native({action: "accounts", origin: site.origin});
   const status = document.querySelector("#status");
   status.textContent = accounts.length ? "选择要填写的字段" : "当前网站没有匹配账号";
@@ -31,14 +32,7 @@ async function start() {
             target: {tabId: tab.id, documentIds: [page.documentId]}, args: [site.origin, field, value],
             func: (origin, field, value) => {
               if (window !== window.top || location.origin !== origin) return false;
-              const selectors = {
-                username: 'input[autocomplete="username"],input[type="email"],input[name="username"]',
-                password: 'input[type="password"]:not([autocomplete="new-password"])',
-                otp_code: 'input[autocomplete="one-time-code"]',
-              };
-              const candidates = [...document.querySelectorAll(selectors[field])].filter(input =>
-                !input.disabled && !input.readOnly && input.checkVisibility() &&
-                (!input.form || new URL(input.form.action || location.href).origin === origin));
+              const candidates = [...document.querySelectorAll("input")].filter(input => globalThis.akskFieldOf(input) === field);
               const input = candidates.includes(document.activeElement) ? document.activeElement :
                 candidates.length === 1 ? candidates[0] : null;
               if (!input) return false;

@@ -1,0 +1,20 @@
+{
+  "fill": {
+    "solid": "srgb:0.88,0.95,0.91,1.0"
+  },
+  "groups": [
+    {
+      "layers": [
+        {
+          "image-name": "Lock.svg",
+          "name": "Lock"
+        }
+      ]
+    }
+  ],
+  "supported-platforms": {
+    "squares": [
+      "macOS"
+    ]
+  }
+}
