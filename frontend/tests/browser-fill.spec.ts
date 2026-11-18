@@ -37,3 +37,20 @@ test("Chrome popup fills each step and rejects ambiguous and foreign form target
   await page.getByRole("button", {name: "密码"}).click();
   await expect(page.locator("input")).toHaveValue("");
 });
+
+test("classifies mixed-language MFA verification placeholders", async ({ page }) => {
+  await page.setContent('<input type="text" autocomplete="off">');
+  await page.addScriptTag({path: resolve("../browser/fields.js")});
+  const classify = (placeholder: string) => page.locator("input").evaluate(
+    (input, text) => {
+      input.placeholder = text;
+      return globalThis.akskFieldOf(input);
+    },
+    placeholder,
+  );
+  await expect(classify("MFA Code")).resolves.toBe("otp_code");
+  await expect(classify("MFA 验证码")).resolves.toBe("otp_code");
+  await expect(classify("MFA验证码")).resolves.toBe("otp_code");
+  await expect(classify("OTP 口令")).resolves.toBe("otp_code");
+  await expect(classify("验证码")).resolves.toBeUndefined();
+});
