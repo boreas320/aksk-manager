@@ -132,10 +132,24 @@ sys.stdout.buffer.write(struct.pack("<I",len(out))+out)
   await beforeSelect();
   await page.mouse.click((model.content[0]+model.content[4])/2,(model.content[1]+model.content[5])/2);
   }
-  await chooseAccount(async()=>assert.equal(await page.locator("#el-id-123-3").inputValue(),""));
+  await chooseAccount(async()=>{
+    assert.equal(await page.locator("#el-id-123-3").inputValue(),"");
+    assert.equal(await page.evaluate(()=>document.activeElement?.id),"el-id-123-3");
+  });
   await page.waitForFunction(()=>document.querySelector("input").value==="demo");
   // Reopen after choosing an account, with a different username already present.
   const username = page.locator("#el-id-123-3");
+  await username.fill("existing-user");
+  await username.click();
+  await page.waitForFunction(()=>document.documentElement.children.length > 2);
+  await page.keyboard.type("-edited");
+  assert.match(await username.inputValue(),/-edited/);
+  await username.click();
+  await new Promise(resolveDelay=>setTimeout(resolveDelay,150));
+  const suppressedButton=(await dom.send("Accessibility.getFullAXTree")).nodes.find(nodeItem =>
+    nodeItem.role?.value==="button" && nodeItem.name?.value==="AKSK browser smoke");
+  assert.equal(suppressedButton,undefined,"chooser reopened while editing focused input");
+  await page.locator("#loginBox").focus();
   await username.fill("existing-user");
   await username.click();
   await chooseAccount(async()=>assert.equal(await username.inputValue(),"existing-user"));
@@ -149,6 +163,13 @@ sys.stdout.buffer.write(struct.pack("<I",len(out))+out)
   await page.locator("input").click();
   await chooseAccount(async()=>assert.equal(await page.locator("input").inputValue(),"12"));
   await page.waitForFunction(()=>/^\d{6}$/.test(document.querySelector("input").value));
+  await page.locator("form").evaluate(f=>{
+    f.innerHTML='<div id="otp-box" style="position:relative"><div class="cells" style="display:flex;gap:8px">'+'<div class="cell" style="width:40px;height:40px;border:1px solid #ccc"></div>'.repeat(6)+'</div><input id="totp-code" type="tel" autocomplete="one-time-code" maxlength="6" style="position:absolute;left:300px;top:0;width:36px;color:transparent"></div>';
+    f.querySelector(".cells").addEventListener("click",()=>f.querySelector("#totp-code").focus());
+  });
+  await page.locator(".cell").first().click();
+  await chooseAccount(async()=>assert.equal(await page.evaluate(()=>document.activeElement?.id),"totp-code"));
+  await page.waitForFunction(()=>/^\d{6}$/.test(document.querySelector("#totp-code").value));
   console.log("PASS: page clicks → multi-account selection → username, password and OTP");
   console.log("PASS: installed popup and page-click flows; host:", simulated ? "fixture" : "signed Keychain helper");
 } finally {

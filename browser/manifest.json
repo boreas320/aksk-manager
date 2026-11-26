@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAvDhb5JXzorpe/ZfwZTq4rb+T4XkgDz67P6tlF7lpuisZX/u+RuS9OV762dA93Un4LN+Nq03MpT0uzD7TN9ftrFdQ/2bDcoTHwbb1sAyxHdJzRVlA5Pw6E6Q8/2LKuaGVQVM6rNwWNoRZCGqhVs9tfhwSF4DHetnSSfeRvIbszfOgKG2/GpvqKSwgwB22jaziOLNISHp8DUySct95A+cS7WX0OTSBflLKOurNK1Guf/qamBSlv3J5yFwaKzW+fnb81pIfeOx5ycHHnfDw1xTUagsOxpdU0YKyu8nU5BarLBJe9jP653LaAr4mwuYPRlfjdirsDzmzIp4k8dFmLdetVQIDAQAB",
   "name": "AKSK Manager",
-  "version": "0.3.4",
+  "version": "0.3.9",
   "description": "为当前网站填入选定账号的用户名、密码或验证码",
   "permissions": [
     "activeTab",

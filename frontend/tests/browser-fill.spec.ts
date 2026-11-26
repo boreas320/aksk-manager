@@ -54,3 +54,51 @@ test("classifies mixed-language MFA verification placeholders", async ({ page })
   await expect(classify("OTP 口令")).resolves.toBe("otp_code");
   await expect(classify("验证码")).resolves.toBeUndefined();
 });
+
+test("click-fill keeps input focus for typing and suppresses repeat popups until blur", async ({ page }) => {
+  const origin = "https://login.example.invalid";
+  await page.route(origin + "/**", route => route.fulfill({
+    contentType: "text/html",
+    body: '<form><input id="user" name="username" value="xiangshuai@200042559604"><input id="pw" type="password"></form>',
+  }));
+  await page.goto(origin);
+  await page.evaluate(() => {
+    Object.assign(window, {
+      chrome: {
+        runtime: {
+          sendMessage: async (request: any) => request.action === "accounts"
+            ? [{id: "1", revision: "1", name: "Tencent Cloud ECOM"}]
+            : "filled-user",
+        },
+      },
+    });
+  });
+  await page.addScriptTag({path: resolve("../browser/fields.js")});
+  await page.addScriptTag({path: resolve("../browser/click-fill.js")});
+
+  const user = page.locator("#user");
+  const menuCount = () => page.evaluate(() => document.documentElement.querySelectorAll(":scope > div").length);
+
+  await user.click();
+  await expect.poll(menuCount).toBe(1);
+  await expect(user).toBeFocused();
+
+  await page.keyboard.press("ArrowRight");
+  await page.keyboard.press("Backspace");
+  await page.keyboard.type("9");
+  await expect(user).not.toHaveValue("xiangshuai@200042559604");
+  await expect(user).toHaveValue(/9/);
+  await expect.poll(menuCount).toBe(0);
+
+  await user.click();
+  await page.waitForTimeout(100);
+  expect(await menuCount()).toBe(0);
+
+  await page.locator("#pw").click();
+  await expect.poll(menuCount).toBe(1);
+  await expect(page.locator("#pw")).toBeFocused();
+
+  await page.locator("#pw").click();
+  await expect.poll(menuCount).toBe(0);
+  await expect(page.locator("#pw")).toBeFocused();
+});

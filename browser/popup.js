@@ -22,7 +22,7 @@ async function start() {
     const title = document.createElement("p");
     title.textContent = account.name;
     section.append(title);
-    for (const field of account.fields.filter(field => Object.hasOwn(labels, field))) {
+    for (const field of Object.keys(labels).filter(field => account.fields.includes(field))) {
       const button = document.createElement("button");
       button.textContent = labels[field];
       button.onclick = async () => {
