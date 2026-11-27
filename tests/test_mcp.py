@@ -1,4 +1,5 @@
 import json
+import sys
 from pathlib import Path
 
 import pytest
@@ -84,6 +85,23 @@ async def test_run_tool_returns_safe_completed_result(api, native):
     output = await api.get_run(job["id"])
     assert TOKEN not in output.model_dump_json()
     assert "[REDACTED]" in output.structuredContent["data"]["stdout"]
+
+
+async def test_website_otp_binding_is_generated_and_redacted(api, native):
+    record = await create(native, kind="password", values={
+        "url": "https://example.invalid", "username": "demo", "totp": "JBSWY3DPEHPK3PXP"
+    })
+    assert "otp_code" in record["fields"]
+    program = (
+        "import os, re, sys; code = os.environ['OTP']; assert re.fullmatch('[0-9]{6}', code); "
+        "print(code); print(code, file=sys.stderr)"
+    )
+    result = await api.run_with_secrets(
+        [sys.executable, "-c", program], "/tmp", {"OTP": {"secret_id": record["id"], "field": "otp_code"}}
+    )
+    job = await finished(native, result.structuredContent["data"])
+    assert job["state"] == "completed"
+    assert job["stdout"].strip() == job["stderr"].strip() == "[REDACTED]"
 
 
 async def test_errors_do_not_echo_unexpected_exception(api, monkeypatch):

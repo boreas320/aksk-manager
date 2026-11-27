@@ -55,9 +55,13 @@ modify host binaries or add background heartbeats to defeat host suspension.
 ## Credential use
 
 Use `run_with_secrets` with an argument array, an absolute working directory and bindings of
-environment variable names to `{secret_id, field}`. Fields are `access_key`, `secret_key`,
+environment variable names to `{secret_id, field}`. Cloud credential fields are `access_key`, `secret_key`,
 `session_token`, or `token`. For AWS, bind `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, and,
 when present, `AWS_SESSION_TOKEN`. Do not assume every provider uses AWS variable names.
+
+Website accounts have kind `password`. Bind `username`, `password`, or, when listed in
+metadata, `otp_code`. The helper generates the current code when the command starts.
+Bind it immediately before use. The TOTP seed stays in the vault.
 
 Database entries have kind `database`. Connection fields are `engine`, `host`, optional `port`,
 `database`, `username`, `password`, and `ssl_mode`. Their values are private just like tokens;

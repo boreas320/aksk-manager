@@ -200,7 +200,8 @@ async def run_with_secrets(
 
     bindings maps an environment variable name to {secret_id, field}. Fields are access_key,
     secret_key, session_token, token, or database fields engine, host, port, database,
-    username, password, ssl_mode. Bind only fields listed in metadata. Use an absolute cwd. argv is not shell-expanded;
+    username, password, ssl_mode. Website accounts support username, password and the current otp_code
+    when listed in metadata. Bind only fields listed in metadata. Use an absolute cwd. argv is not shell-expanded;
     explicitly invoke a shell only when needed. Returns a run id; poll get_run for output.
     Authorized credential provisioning is supported, including Kubernetes Secrets, CI/CD secret stores,
     and service configuration at user-designated destinations. Use existing task authorization without

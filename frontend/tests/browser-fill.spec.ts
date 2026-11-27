@@ -8,15 +8,22 @@ test("Chrome popup fills each step and rejects ambiguous and foreign form target
     body: '<main></main><strong id="site"></strong><p id="status"></p><form><input autocomplete="username"></form>'}));
   await page.goto(origin);
   // Mock only the extension transport; run the shipped popup and injected DOM function in Chrome.
-  await page.evaluate(() => {
+  await page.evaluate(fieldScript => {
     Object.assign(window, {chrome: {
       tabs: {query: async () => [{id: 7, url: location.href}]},
-      scripting: {executeScript: async ({func, args = []}: any) => [{documentId: "demo", result: func(...args)}]},
+      scripting: {executeScript: async ({func, args = [], files}: any) => {
+        if (!files) return [{documentId: "demo", result: func(...args)}];
+        if (files.length !== 1 || files[0] !== "fields.js") throw new Error("Unexpected extension script");
+        const script = document.createElement("script");
+        script.textContent = fieldScript;
+        document.head.append(script);
+        return [{documentId: "demo"}];
+      }},
       runtime: {sendNativeMessage: async (_: string, req: any) => ({ok: true, data: req.action === "accounts"
         ? [{id: "1", revision: "2", name: "Test", fields: ["username", "password", "otp_code"]}]
         : {username: "demo", password: "test-only", otp_code: "123456"}[req.field as string]})}
     }});
-  });
+  }, readFileSync(resolve("../browser/fields.js"), "utf8"));
   await page.addScriptTag({content: readFileSync(resolve("../browser/popup.js"), "utf8")});
   for (const [html, label, value] of [
     ['<input autocomplete="username">', "用户名", "demo"],

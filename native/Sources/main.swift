@@ -286,11 +286,12 @@ final class Service {
         else { throw invalid() }
         let r = try store.read(id)
         guard r.deletedAt == nil else { throw Failure(code: "TRASHED", message: "所选密钥在回收站中。") }
-        guard r.bindable(field), let value = r.values[field], !value.isEmpty else {
+        guard let value = try r.commandValue(for: field), !value.isEmpty else {
           throw Failure(code: "FIELD_NOT_FOUND", message: "所选密钥字段不存在。")
         }
         env[key] = value
         ids.insert(id)
+        secrets.append(value)
         secrets.append(contentsOf: r.values.values)
       }
       let job = Job(ids: ids.sorted())

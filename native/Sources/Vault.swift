@@ -147,6 +147,12 @@ struct Record: Codable {
   func bindable(_ field: String) -> Bool {
     kind != "password" || ["username", "password"].contains(field)
   }
+  func commandValue(for field: String) throws -> String? {
+    if kind == "password", field == "otp_code", let seed = values["totp"] {
+      return try currentCode(seed)
+    }
+    return bindable(field) ? values[field] : nil
+  }
   func matches(_ query: String, includeValues: Bool) -> Bool {
     func normalize(_ text: String) -> String {
       text.folding(options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive],
